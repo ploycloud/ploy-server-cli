@@ -7,14 +7,17 @@ Ploy CLI is a powerful tool for managing and deploying your cloud applications.
 ### Option 1: Install Script (Recommended)
 
 To install Ploy CLI, run:
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/cloudoploy/ploy-cli/main/install.sh | bash
 ```
+
 This script will automatically download and install the latest version of Ploy CLI.
 
 ### Option 2: Manual Installation
 
-1. Go to the [releases page](https://github.com/cloudoploy/ploy-cli/releases) and download the latest version for your operating system and architecture.
+1. Go to the [releases page](https://github.com/cloudoploy/ploy-cli/releases) and download the latest version for your
+   operating system and architecture.
 2. Rename the downloaded file to `ploy`.
 3. Make the file executable: `chmod +x ploy`
 4. Move the file to a directory in your PATH, e.g., `sudo mv ploy /usr/local/bin/`
@@ -25,14 +28,13 @@ This script will automatically download and install the latest version of Ploy C
 ploy [command]
 ```
 
-
 Available Commands:
 
 ### Global Services
 
-- `ploy global start`: Start global services (MySQL, Redis, Nginx Proxy)
-- `ploy global stop`: Stop global services
-- `ploy global restart`: Restart global services
+- `ploy services start`: Start global services (MySQL, Redis, Nginx Proxy)
+- `ploy services stop`: Stop global services
+- `ploy services restart`: Restart global services
 
 ### Site Management
 
@@ -64,11 +66,10 @@ Available Commands:
 - `ploy update`: Update Ploy CLI to the latest version
 
 For more information on a specific command, run:
+
 ```bash
 ploy [command] --help
 ```
-
-
 
 ## Examples
 
@@ -99,13 +100,16 @@ ploy [command] --help
 
 ## Configuration
 
-Ploy CLI uses a configuration file to store your API key and default region. You can set these values by creating a `~/.ploy/config.yaml` file with the following content:
+Ploy CLI uses a configuration file to store your API key and default region. You can set these values by creating
+a `~/.ploy/config.yaml` file with the following content:
+
 ```yaml
 api_key: your-api-key-here
 region: us-west-2
 ```
 
 Alternatively, you can set environment variables:
+
 ```bash
 export PLOY_API_KEY=your-api-key-here
 export PLOY_REGION=us-west-2
@@ -152,4 +156,5 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 ## Support
 
-If you encounter any issues or have questions, please [open an issue](https://github.com/cloudoploy/ploy-cli/issues) on GitHub.
+If you encounter any issues or have questions, please [open an issue](https://github.com/cloudoploy/ploy-cli/issues) on
+GitHub.
