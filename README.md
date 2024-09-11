@@ -20,14 +20,48 @@ This script will automatically download and install the latest version of Ploy C
 4. Move the file to a directory in your PATH, e.g., `sudo mv ploy /usr/local/bin/`
 
 ## Usage
+
 ```bash
 ploy [command]
 ```
 
+
 Available Commands:
-- `deploy`: Deploy a repository to CloudOPloy
-- `list`: List all deployments
-- `status`: Check the status of a deployment
+
+### Global Services
+
+- `ploy global start`: Start global services (MySQL, Redis, Nginx Proxy)
+- `ploy global stop`: Stop global services
+- `ploy global restart`: Restart global services
+
+### Site Management
+
+- `ploy sites start`: Start all sites
+- `ploy sites stop`: Stop all sites
+- `ploy sites restart`: Restart all sites
+
+### Individual Site Operations
+
+- `ploy start`: Start the current site
+- `ploy stop`: Stop the current site
+- `ploy restart`: Restart the current site
+- `ploy logs [container]`: View logs from containers
+- `ploy exec [container] [command]`: Execute commands inside a container
+
+### WordPress CLI
+
+- `ploy wp [wp-cli commands]`: Execute WP-CLI commands for the current WordPress site
+
+### Deployment and Status
+
+- `ploy deploy`: Deploy a repository to CloudOPloy
+- `ploy list`: List all deployments
+- `ploy status`: Check the status of a deployment
+
+### Miscellaneous
+
+- `ploy version`: Display the current version of Ploy CLI
+- `ploy update`: Update Ploy CLI to the latest version
 
 For more information on a specific command, run:
 ```bash
@@ -35,21 +69,32 @@ ploy [command] --help
 ```
 
 
-### Examples
 
-1. Deploy a repository:
+## Examples
+
+1. Start global services:
+   ```bash
+   ploy global start
+   ```
+
+2. Deploy a repository:
    ```bash
    ploy deploy https://github.com/username/repo.git
    ```
 
-2. List all deployments:
+3. Start all sites:
    ```bash
-   ploy list
+   ploy sites start
    ```
 
-3. Check the status of a deployment:
+4. Execute a WP-CLI command:
    ```bash
-   ploy status deployment-name
+   ploy wp plugin list
+   ```
+
+5. View logs for a specific container:
+   ```bash
+   ploy logs nginx
    ```
 
 ## Configuration
@@ -65,7 +110,6 @@ Alternatively, you can set environment variables:
 export PLOY_API_KEY=your-api-key-here
 export PLOY_REGION=us-west-2
 ```
-
 
 ## Development
 
