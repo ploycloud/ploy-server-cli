@@ -18,8 +18,7 @@ var WpCmd = &cobra.Command{
 			fmt.Printf("Error: %v\n", err)
 			return
 		}
-		wpArgs := append([]string{"wp"}, args...)
-		if err := compose.Exec("wordpress", wpArgs...); err != nil {
+		if err := docker.RunWpCli(compose.Path, args); err != nil {
 			fmt.Printf("Error executing WP-CLI command: %v\n", err)
 		}
 	},
