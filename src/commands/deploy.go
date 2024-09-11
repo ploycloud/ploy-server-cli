@@ -9,7 +9,7 @@ import (
 
 var DeployCmd = &cobra.Command{
 	Use:   "deploy [repo]",
-	Short: "Deploy a repository to CloudOPloy",
+	Short: "Deploy a repository to CloudOPloy server",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		repo := args[0]
