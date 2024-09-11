@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"github.com/cloudoploy/cloudoploy-cli/internal/commands"
+	"github.com/cloudoploy/ploy-cli/internal/commands"
 	"github.com/spf13/cobra"
 )
 
