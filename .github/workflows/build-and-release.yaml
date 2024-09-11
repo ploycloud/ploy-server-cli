@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    name: Build and Release
+    name: Build Binaries
     runs-on: ubuntu-latest
 
     steps:
@@ -57,7 +57,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd build
-          for asset in ploy-*.tar.gz ploy-*.zip checksums.txt; do
+          for asset in ploy-*.tar.gz checksums.txt; do
             echo "Uploading $asset"
             gh release upload ${{ github.ref_name }} $asset
           done
