@@ -4,6 +4,11 @@ Ploy CLI is a powerful tool for managing and deploying your cloud applications.
 
 ## Installation
 
+### Prerequisites
+
+- [Docker](https://www.docker.com/get-started)
+- [Docker Compose](https://docs.docker.com/compose/install/)
+
 ### Option 1: Install Script (Recommended)
 
 To install Ploy CLI, run:
