@@ -1,6 +1,6 @@
 package common
 
-const CurrentCliVersion = "0.1.0-alpha"
+const CurrentCliVersion = "0.1.0"
 
 const HomeDir = "/home/cloudoploy"
 const ServicesDir = HomeDir + "/.ploy"
