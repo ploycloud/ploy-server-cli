@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 
+	"github.com/cloudoploy/ploy-cli/src/docker"
 	"github.com/spf13/cobra"
 )
 
@@ -12,6 +13,14 @@ var WpCmd = &cobra.Command{
 	Long:  `Execute WP-CLI commands for the current WordPress site.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Executing WP-CLI command:", args)
-		// Add logic to execute WP-CLI commands
+		compose, err := docker.GetComposeFile()
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+			return
+		}
+		wpArgs := append([]string{"wp"}, args...)
+		if err := compose.Exec("wordpress", wpArgs...); err != nil {
+			fmt.Printf("Error executing WP-CLI command: %v\n", err)
+		}
 	},
 }
