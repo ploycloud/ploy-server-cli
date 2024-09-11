@@ -2,9 +2,13 @@ package commands
 
 import (
 	"fmt"
+	"github.com/cloudoploy/ploy-cli/src/common"
 	"github.com/cloudoploy/ploy-cli/src/docker"
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"os"
+	"path/filepath"
+	"strings"
 )
 
 var SitesCmd = &cobra.Command{
@@ -19,88 +23,105 @@ func init() {
 	SitesCmd.AddCommand(sitesRestartCmd)
 }
 
-func getAllSites() ([]string, error) {
-	// This is a placeholder. You should implement a method to get all site directories
-	return []string{"/path/to/site1", "/path/to/site2"}, nil
-}
-
 var sitesStartCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Start all sites",
+	Long:  `Start all sites on the server.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Starting all sites...")
-		sites, err := getAllSites()
-		if err != nil {
-			fmt.Printf("Error getting sites: %v\n", err)
-			return
-		}
-		for _, site := range sites {
-			if err := os.Chdir(site); err != nil {
-				fmt.Printf("Error changing to directory %s: %v\n", site, err)
-				continue
-			}
-			compose, err := docker.GetComposeFile()
-			if err != nil {
-				fmt.Printf("Error in site %s: %v\n", site, err)
-				continue
-			}
-			if err := compose.Up(); err != nil {
-				fmt.Printf("Error starting site %s: %v\n", site, err)
-			}
-		}
+		startAllSites()
 	},
 }
 
 var sitesStopCmd = &cobra.Command{
 	Use:   "stop",
 	Short: "Stop all sites",
+	Long:  `Stop all sites on the server.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Stopping all sites...")
-		sites, err := getAllSites()
-		if err != nil {
-			fmt.Printf("Error getting sites: %v\n", err)
-			return
-		}
-		for _, site := range sites {
-			if err := os.Chdir(site); err != nil {
-				fmt.Printf("Error changing to directory %s: %v\n", site, err)
-				continue
-			}
-			compose, err := docker.GetComposeFile()
-			if err != nil {
-				fmt.Printf("Error in site %s: %v\n", site, err)
-				continue
-			}
-			if err := compose.Down(); err != nil {
-				fmt.Printf("Error stopping site %s: %v\n", site, err)
-			}
-		}
+		stopAllSites()
 	},
 }
 
 var sitesRestartCmd = &cobra.Command{
 	Use:   "restart",
 	Short: "Restart all sites",
+	Long:  `Restart all sites on the server.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Restarting all sites...")
-		sites, err := getAllSites()
-		if err != nil {
-			fmt.Printf("Error getting sites: %v\n", err)
-			return
-		}
-		for _, site := range sites {
-			if err := os.Chdir(site); err != nil {
-				fmt.Printf("Error changing to directory %s: %v\n", site, err)
-				continue
-			}
-			compose, err := docker.GetComposeFile()
-			if err != nil {
-				fmt.Printf("Error in site %s: %v\n", site, err)
-				continue
-			}
-			if err := compose.Restart(); err != nil {
-				fmt.Printf("Error restarting site %s: %v\n", site, err)
-			}
-		}
+		stopAllSites()
+		startAllSites()
 	},
+}
+
+func startAllSites() {
+	sitesDir := common.HomeDir
+	foundSite := false
+
+	entries, err := os.ReadDir(sitesDir)
+	if err != nil {
+		color.Red("Error reading directory %s: %v\n", sitesDir, err)
+		return
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			if strings.HasPrefix(entry.Name(), ".") {
+				continue
+			}
+
+			path := filepath.Join(sitesDir, entry.Name())
+			composePath := filepath.Join(path, "docker-compose.yml")
+			if _, err := os.Stat(composePath); err == nil {
+				color.Yellow("Starting site in %s\n", filepath.Base(path))
+				err := docker.RunCompose(composePath, "up", "-d")
+
+				if nil != err {
+					continue
+				}
+
+				foundSite = true
+			}
+		}
+	}
+
+	if !foundSite {
+		fmt.Println("No sites found to start.")
+	}
+}
+
+func stopAllSites() {
+	sitesDir := common.HomeDir
+	foundSite := false
+
+	entries, err := os.ReadDir(sitesDir)
+	if err != nil {
+		color.Red("Error reading directory %s: %v\n", sitesDir, err)
+		return
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			if strings.HasPrefix(entry.Name(), ".") {
+				continue
+			}
+
+			path := filepath.Join(sitesDir, entry.Name())
+			composePath := filepath.Join(path, "docker-compose.yml")
+			if _, err := os.Stat(composePath); err == nil {
+				color.Yellow("Stopping site in %s\n", filepath.Base(path))
+				err := docker.RunCompose(composePath, "down")
+
+				if nil != err {
+					continue
+				}
+
+				foundSite = true
+			}
+		}
+	}
+
+	if !foundSite {
+		fmt.Println("No sites found to stop.")
+	}
 }
