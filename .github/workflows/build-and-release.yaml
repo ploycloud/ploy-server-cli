@@ -1,0 +1,98 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build and Release
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.23.1'
+
+    - name: Build
+      run: |
+        chmod +x ./build.sh
+        ./build.sh
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: binaries
+        path: build/*
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Download artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: binaries
+        path: build
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        draft: false
+        prerelease: false
+
+    - name: Upload Release Assets
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        cd build
+        for asset in ploy-*.tar.gz ploy-*.zip checksums.txt; do
+          echo "Uploading $asset"
+          gh release upload ${{ github.ref }} $asset
+        done
+
+  update-homebrew:
+    name: Update Homebrew Formula
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout homebrew-ploy repository
+      uses: actions/checkout@v3
+      with:
+        repository: cloudoploy/homebrew-ploy
+        token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+    - name: Update formula
+      env:
+        PLOY_VERSION: ${{ github.ref_name }}
+      run: |
+        # Remove 'v' prefix from version
+        VERSION=${PLOY_VERSION#v}
+
+        # Update formula file
+        sed -i 's/version "[0-9.]*"/version "'$VERSION'"/' Formula/ploy.rb
+
+        # Get SHA256 for macOS (darwin) amd64 build
+        DARWIN_AMD64_SHA=$(curl -sL https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ploy-darwin-amd64.tar.gz | shasum -a 256 | cut -d ' ' -f 1)
+        sed -i 's|sha256 "[a-f0-9]*"|sha256 "'$DARWIN_AMD64_SHA'"|' Formula/ploy.rb
+
+        # Commit and push changes
+        git config user.name github-actions
+        git config user.email github-actions@github.com
+        git add Formula/ploy.rb
+        git commit -m "Update ploy to $VERSION"
+        git push
