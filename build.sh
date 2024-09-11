@@ -46,16 +46,13 @@ build() {
 # Build for various platforms
 build linux amd64
 build linux arm64
-#build darwin amd64
-#build darwin arm64
-#build windows amd64
 
 # Generate checksums
 cd "$BUILD_DIR"
 if command -v sha256sum > /dev/null; then
-    sha256sum ${BINARY_NAME}-*.tar.gz ${BINARY_NAME}-*.zip > checksums.txt
+    sha256sum ${BINARY_NAME}-*.tar.gz > checksums.txt
 elif command -v shasum > /dev/null; then
-    shasum -a 256 ${BINARY_NAME}-*.tar.gz ${BINARY_NAME}-*.zip > checksums.txt
+    shasum -a 256 ${BINARY_NAME}-*.tar.gz > checksums.txt
 else
     echo "Neither sha256sum nor sass command found. Skipping checksum generation."
 fi

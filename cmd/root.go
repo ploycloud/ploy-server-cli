@@ -2,13 +2,15 @@ package cmd
 
 import (
 	"github.com/cloudoploy/ploy-cli/src/commands"
+	"github.com/cloudoploy/ploy-cli/src/common"
 	"github.com/spf13/cobra"
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "ploy",
-	Short: "Ploy CLI - Manage your cloud deployments",
-	Long:  `Ploy CLI is a powerful tool for managing and deploying your cloud applications.`,
+	Use:     "ploy",
+	Short:   "Ploy CLI - Manage your cloud deployments",
+	Long:    `Ploy CLI is a powerful tool for managing and deploying your cloud applications. You are using ploy version: ` + common.CurrentCliVersion,
+	Version: common.CurrentCliVersion,
 }
 
 func Execute() error {
@@ -29,4 +31,5 @@ func init() {
 	rootCmd.AddCommand(commands.LogsCmd)
 	rootCmd.AddCommand(commands.VersionCmd)
 	rootCmd.AddCommand(commands.UpdateCmd)
+	rootCmd.AddCommand(commands.EchoCmd)
 }

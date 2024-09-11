@@ -70,7 +70,7 @@ sudo mv "$TMP_DIR/ploy" "$INSTALL_DIR/ploy"
 # Verify installation
 if command -v ploy &> /dev/null; then
     echo "Ploy CLI has been successfully installed!"
-    ploy --version
+    ploy -version
 else
     echo "Installation failed. Please check your permissions and try again."
     exit 1
