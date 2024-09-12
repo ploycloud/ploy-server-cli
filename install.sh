@@ -45,8 +45,8 @@ curl -L -o "$DOWNLOAD_FILE" "$DOWNLOAD_URL"
 echo "Extracting $DOWNLOAD_FILE..."
 tar -xzf "$DOWNLOAD_FILE" -C "$TEMP_DIR"
 
-echo "Installing to /usr/local/bin/fly..."
-sudo mv "$TEMP_DIR/fly-$OS-$ARCH" /usr/local/bin/ploy
+echo "Installing to /usr/local/bin/ploy..."
+sudo mv "$TEMP_DIR/ploy-$OS-$ARCH" /usr/local/bin/ploy
 sudo chmod +x /usr/local/bin/ploy
 
 # Clean up
