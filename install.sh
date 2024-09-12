@@ -9,51 +9,24 @@
 
 set -e
 
-# Fetch the latest release version
-echo "Fetching the latest Ploy CLI version..."
-LATEST_RELEASE=$(curl -s https://api.github.com/repos/cloudoploy/ploy-cli/releases/latest)
-PLOY_VERSION=$(echo "$LATEST_RELEASE" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' | sed 's/v//')
+# Determine OS and architecture
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m)
 
-if [ -z "$PLOY_VERSION" ]; then
-    echo "Failed to fetch the latest version. Please check your internet connection and try again."
+if [ "$ARCH" == "x86_64" ]; then
+    ARCH="amd64"
+elif [[ "$ARCH" == "arch64" || "$ARCH" == "arm64" ]]; then
+    ARCH="arm64"
+else
+    echo "Unsupported architecture: $ARCH"
     exit 1
 fi
 
-echo "Latest Ploy CLI version: $PLOY_VERSION"
-
-# Determine system architecture
-ARCH=$(uname -m)
-case $ARCH in
-    x86_64)
-        ARCH="amd64"
-        ;;
-    aarch64|arm64)
-        ARCH="arm64"
-        ;;
-    armv7l)
-        ARCH="armv7"
-        ;;
-    *)
-        echo "Unsupported architecture: $ARCH"
-        exit 1
-        ;;
-esac
-echo "Detected architecture: $ARCH"
-
-# Determine operating system
-OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-case $OS in
-    linux|darwin)
-        ;;
-    *)
-        echo "Unsupported operating system: $OS"
-        exit 1
-        ;;
-esac
-
-echo "Detected OS: $OS"
-
-# Download URL
+# Get latest release from GitHub API
+REPO="cloudoploy/ploy-cli"
+LATEST_RELEASE=$(curl -s https://api.github.com/repos/$REPO/releases/latest)
+TAG_NAME=$(echo "$LATEST_RELEASE" | grep -oP '"tag_name": "\K(.*)(?=")')
+echo "Latest release: $TAG_NAME"
 DOWNLOAD_URL=$(echo "$LATEST_RELEASE" | grep -oP '"browser_download_url": "\K(.*'${OS}'-'${ARCH}'.tar.gz)(?=")')
 
 if [ -z "$DOWNLOAD_URL" ]; then
@@ -61,24 +34,23 @@ if [ -z "$DOWNLOAD_URL" ]; then
     exit 1
 fi
 
+# Download the latest release
+TEMP_DIR=$(mktemp -d)
+DOWNLOAD_FILE="$TEMP_DIR/ploy-$OS-$ARCH.tar.gz"
 
-# Installation directory
-INSTALL_DIR="/usr/local/bin"
+echo "Downloading $DOWNLOAD_URL..."
+curl -L -o "$DOWNLOAD_FILE" "$DOWNLOAD_URL"
 
-# Temporary directory for download
-TMP_DIR=$(mktemp -d)
-trap 'rm -rf "$TMP_DIR"' EXIT
+# Extract and install
+echo "Extracting $DOWNLOAD_FILE..."
+tar -xzf "$DOWNLOAD_FILE" -C "$TEMP_DIR"
 
-# Download Ploy CLI
-echo "Downloading Ploy CLI..."
-curl -fsSL "$DOWNLOAD_URL" -o "$TMP_DIR/ploy"
+echo "Installing to /usr/local/bin/fly..."
+sudo mv "$TEMP_DIR/fly-$OS-$ARCH" /usr/local/bin/ploy
+sudo chmod +x /usr/local/bin/ploy
 
-# Make the binary executable
-chmod +x "$TMP_DIR/ploy"
-
-# Move the binary to the installation directory
-echo "Installing Ploy CLI to $INSTALL_DIR..."
-sudo mv "$TMP_DIR/ploy" "$INSTALL_DIR/ploy"
+# Clean up
+rm -rf "$TEMP_DIR"
 
 # Verify installation
 if command -v ploy &> /dev/null; then
