@@ -27,14 +27,18 @@ case $ARCH in
     x86_64)
         ARCH="amd64"
         ;;
-    aarch64)
+    aarch64|arm64)
         ARCH="arm64"
+        ;;
+    armv7l)
+        ARCH="armv7"
         ;;
     *)
         echo "Unsupported architecture: $ARCH"
         exit 1
         ;;
 esac
+echo "Detected architecture: $ARCH"
 
 # Determine operating system
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
@@ -47,13 +51,13 @@ case $OS in
         ;;
 esac
 
-# Download URL
-DOWNLOAD_URL=$(echo "$LATEST_RELEASE" | grep -oP '"browser_download_url": "\K(.*'${OS}'-'${ARCH}'.tar.gz)(?=")')
-
 if [ -z "$DOWNLOAD_URL" ]; then
     echo "No suitable binary found for OS: $OS and architecture: $ARCH"
     exit 1
 fi
+
+# Download URL
+DOWNLOAD_URL=$(echo "$LATEST_RELEASE" | grep -oP '"browser_download_url": "\K(.*'${OS}'-'${ARCH}'.tar.gz)(?=")')
 
 # Installation directory
 INSTALL_DIR="/usr/local/bin"
@@ -76,7 +80,7 @@ sudo mv "$TMP_DIR/ploy" "$INSTALL_DIR/ploy"
 # Verify installation
 if command -v ploy &> /dev/null; then
     echo "Ploy CLI has been successfully installed!"
-    ploy -version
+    ploy --version
 else
     echo "Installation failed. Please check your permissions and try again."
     exit 1
