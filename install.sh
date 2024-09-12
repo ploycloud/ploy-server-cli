@@ -51,13 +51,16 @@ case $OS in
         ;;
 esac
 
+echo "Detected OS: $OS"
+
+# Download URL
+DOWNLOAD_URL=$(echo "$LATEST_RELEASE" | grep -oP '"browser_download_url": "\K(.*'${OS}'-'${ARCH}'.tar.gz)(?=")')
+
 if [ -z "$DOWNLOAD_URL" ]; then
     echo "No suitable binary found for OS: $OS and architecture: $ARCH"
     exit 1
 fi
 
-# Download URL
-DOWNLOAD_URL=$(echo "$LATEST_RELEASE" | grep -oP '"browser_download_url": "\K(.*'${OS}'-'${ARCH}'.tar.gz)(?=")')
 
 # Installation directory
 INSTALL_DIR="/usr/local/bin"
