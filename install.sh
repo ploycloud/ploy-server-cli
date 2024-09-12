@@ -11,7 +11,8 @@ set -e
 
 # Fetch the latest release version
 echo "Fetching the latest Ploy CLI version..."
-PLOY_VERSION=$(curl -s https://api.github.com/repos/cloudoploy/ploy-cli/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' | sed 's/v//')
+LATEST_RELEASE=$(curl -s https://api.github.com/repos/cloudoploy/ploy-cli/releases/latest)
+PLOY_VERSION=$(echo "$LATEST_RELEASE" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' | sed 's/v//')
 
 if [ -z "$PLOY_VERSION" ]; then
     echo "Failed to fetch the latest version. Please check your internet connection and try again."
@@ -47,7 +48,12 @@ case $OS in
 esac
 
 # Download URL
-DOWNLOAD_URL="https://github.com/cloudoploy/ploy-cli/releases/download/v${PLOY_VERSION}/ploy-${OS}-${ARCH}"
+DOWNLOAD_URL=$(echo "$LATEST_RELEASE" | grep -oP '"browser_download_url": "\K(.*'${OS}'-'${ARCH}'.tar.gz)(?=")')
+
+if [ -z "$DOWNLOAD_URL" ]; then
+    echo "No suitable binary found for OS: $OS and architecture: $ARCH"
+    exit 1
+fi
 
 # Installation directory
 INSTALL_DIR="/usr/local/bin"
