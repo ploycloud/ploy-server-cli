@@ -1,10 +1,10 @@
 package commands
 
 import (
-	"github.com/cloudoploy/ploy-cli/src/utils"
 	"github.com/fatih/color"
+	"github.com/ploycloud/ploy-cli/src/utils"
 
-	"github.com/cloudoploy/ploy-cli/src/docker"
+	"github.com/ploycloud/ploy-cli/src/docker"
 	"github.com/spf13/cobra"
 )
 

@@ -1,7 +1,7 @@
 package commands
 
 import (
-	"github.com/cloudoploy/ploy-cli/src/common"
+	"github.com/ploycloud/ploy-cli/src/common"
 	"github.com/spf13/cobra"
 )
 

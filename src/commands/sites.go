@@ -2,9 +2,9 @@ package commands
 
 import (
 	"fmt"
-	"github.com/cloudoploy/ploy-cli/src/common"
-	"github.com/cloudoploy/ploy-cli/src/docker"
 	"github.com/fatih/color"
+	"github.com/ploycloud/ploy-cli/src/common"
+	"github.com/ploycloud/ploy-cli/src/docker"
 	"github.com/spf13/cobra"
 	"os"
 	"path/filepath"

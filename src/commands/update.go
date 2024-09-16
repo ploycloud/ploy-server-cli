@@ -2,7 +2,7 @@ package commands
 
 import (
 	"fmt"
-	"github.com/cloudoploy/ploy-cli/src/utils"
+	"github.com/ploycloud/ploy-cli/src/utils"
 	"github.com/spf13/cobra"
 	"os"
 )

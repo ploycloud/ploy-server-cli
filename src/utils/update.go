@@ -9,10 +9,10 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/cloudoploy/ploy-cli/src/common"
+	"github.com/ploycloud/ploy-cli/src/common"
 )
 
-var ReleaseEndpoint = "https://api.github.com/repos/cloudoploy/ploy-cli/releases/latest"
+var ReleaseEndpoint = "https://api.github.com/repos/ploycloud/ploy-cli/releases/latest"
 
 type GitRelease struct {
 	TagName string `json:"tag_name"`
