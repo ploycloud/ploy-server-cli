@@ -3,13 +3,13 @@ package commands
 import (
 	"fmt"
 
-	"github.com/cloudoploy/ploy-cli/src/utils"
+	"github.com/ploycloud/ploy-cli/src/utils"
 	"github.com/spf13/cobra"
 )
 
 var DeployCmd = &cobra.Command{
 	Use:   "deploy [repo]",
-	Short: "Deploy a repository to CloudOPloy server",
+	Short: "Deploy a repository to PloyCloud server",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		repo := args[0]

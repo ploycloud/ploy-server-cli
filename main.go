@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/cloudoploy/ploy-cli/cmd"
+	"github.com/ploycloud/ploy-cli/cmd"
 )
 
 func main() {

@@ -1,6 +1,6 @@
 package config
 
-// Config holds the configuration for the CloudOPloy CLI
+// Config holds the configuration for the PloyCloud CLI
 type Config struct {
 	APIKey string
 	Region string

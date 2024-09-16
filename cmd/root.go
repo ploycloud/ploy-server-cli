@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"github.com/cloudoploy/ploy-cli/src/commands"
-	"github.com/cloudoploy/ploy-cli/src/common"
+	"github.com/ploycloud/ploy-cli/src/commands"
+	"github.com/ploycloud/ploy-cli/src/common"
 	"github.com/spf13/cobra"
 )
 

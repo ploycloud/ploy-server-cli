@@ -1,8 +1,8 @@
 package commands
 
 import (
-	"github.com/cloudoploy/ploy-cli/src/common"
 	"github.com/fatih/color"
+	"github.com/ploycloud/ploy-cli/src/common"
 	"os"
 	"os/exec"
 	"strings"
@@ -54,7 +54,9 @@ var StatusCmd = &cobra.Command{
 			color.Green("Nginx directory exists")
 		}
 
-		if output, err := exec.Command("docker", "version", "--format", "{{.Server.Version}}").CombinedOutput(); err != nil {
+		if output, err := exec.Command(
+			"docker", "version", "--format", "{{.Server.Version}}",
+		).CombinedOutput(); err != nil {
 			color.Red("Docker is not installed")
 		} else {
 			color.Green("Docker is installed, version: %s", strings.TrimSpace(string(output)))

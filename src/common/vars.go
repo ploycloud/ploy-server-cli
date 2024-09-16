@@ -1,8 +1,8 @@
 package common
 
-const CurrentCliVersion = "0.1.3"
+const CurrentCliVersion = "0.2.0"
 
-const HomeDir = "/home/cloudoploy"
+const HomeDir = "/home/ploy"
 const ServicesDir = HomeDir + "/.ploy"
 const GlobalCompose = ServicesDir + "/docker-compose.yml"
 const ProvisionsDir = HomeDir + "/.provisions"
