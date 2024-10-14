@@ -5,7 +5,7 @@
 # This script installs the latest version of the Ploy CLI on your system.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/ploycloud/ploy-cli/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/ploycloud/ploy-server-cli/main/install.sh | bash
 
 set -e
 
@@ -23,7 +23,7 @@ else
 fi
 
 # Get latest release from GitHub API
-REPO="ploycloud/ploy-cli"
+REPO="ploycloud/ploy-server-cli"
 LATEST_RELEASE=$(curl -s https://api.github.com/repos/$REPO/releases/latest)
 TAG_NAME=$(echo "$LATEST_RELEASE" | grep -oP '"tag_name": "\K(.*)(?=")')
 echo "Latest release: $TAG_NAME"

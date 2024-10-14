@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ploycloud/ploy-cli/cmd"
+	"github.com/ploycloud/ploy-server-cli/cmd"
 )
 
 func main() {

@@ -5,8 +5,8 @@ import (
 	"github.com/fatih/color"
 	"os"
 
-	"github.com/ploycloud/ploy-cli/src/common"
-	"github.com/ploycloud/ploy-cli/src/docker"
+	"github.com/ploycloud/ploy-server-cli/src/common"
+	"github.com/ploycloud/ploy-server-cli/src/docker"
 	"github.com/spf13/cobra"
 )
 

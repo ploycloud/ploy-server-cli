@@ -2,7 +2,7 @@ package commands
 
 import (
 	"github.com/fatih/color"
-	"github.com/ploycloud/ploy-cli/src/common"
+	"github.com/ploycloud/ploy-server-cli/src/common"
 	"os"
 	"os/exec"
 	"strings"

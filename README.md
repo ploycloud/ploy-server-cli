@@ -14,14 +14,14 @@ Ploy CLI is a powerful tool for managing and deploying your cloud applications.
 To install Ploy CLI, run:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ploycloud/ploy-cli/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ploycloud/ploy-server-cli/main/install.sh | bash
 ```
 
 This script will automatically download and install the latest version of Ploy CLI.
 
 ### Option 2: Manual Installation
 
-1. Go to the [releases page](https://github.com/ploycloud/ploy-cli/releases) and download the latest version for your
+1. Go to the [releases page](https://github.com/ploycloud/ploy-server-cli/releases) and download the latest version for your
    operating system and architecture.
 2. Rename the downloaded file to `ploy`.
 3. Make the file executable: `chmod +x ploy`
@@ -126,7 +126,7 @@ To contribute to Ploy CLI development:
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/ploycloud/ploy-cli.git
+   git clone https://github.com/ploycloud/ploy-server-cli.git
    cd ploy-cli
    ```
 
@@ -161,5 +161,5 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 ## Support
 
-If you encounter any issues or have questions, please [open an issue](https://github.com/ploycloud/ploy-cli/issues) on
+If you encounter any issues or have questions, please [open an issue](https://github.com/ploycloud/ploy-server-cli/issues) on
 GitHub.
