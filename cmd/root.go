@@ -1,8 +1,10 @@
 package cmd
 
 import (
-	"github.com/ploycloud/ploy-cli/src/commands"
-	"github.com/ploycloud/ploy-cli/src/common"
+	"fmt"
+
+	"github.com/ploycloud/ploy-server-cli/src/commands"
+	"github.com/ploycloud/ploy-server-cli/src/common"
 	"github.com/spf13/cobra"
 )
 
@@ -29,7 +31,17 @@ func init() {
 	rootCmd.AddCommand(commands.RestartCmd)
 	rootCmd.AddCommand(commands.ExecCmd)
 	rootCmd.AddCommand(commands.LogsCmd)
-	rootCmd.AddCommand(commands.VersionCmd)
 	rootCmd.AddCommand(commands.UpdateCmd)
 	rootCmd.AddCommand(commands.EchoCmd)
+
+	// Add a custom version command
+	rootCmd.AddCommand(
+		&cobra.Command{
+			Use:   "version",
+			Short: "Print the version number of ploy cli",
+			Run: func(cmd *cobra.Command, args []string) {
+				fmt.Println(common.CurrentCliVersion)
+			},
+		},
+	)
 }

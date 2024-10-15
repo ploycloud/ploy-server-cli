@@ -2,8 +2,8 @@ package commands
 
 import (
 	"github.com/fatih/color"
-	"github.com/ploycloud/ploy-cli/src/docker"
-	"github.com/ploycloud/ploy-cli/src/utils"
+	"github.com/ploycloud/ploy-server-cli/src/docker"
+	"github.com/ploycloud/ploy-server-cli/src/utils"
 	"github.com/spf13/cobra"
 	"os"
 )

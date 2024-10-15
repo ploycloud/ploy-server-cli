@@ -3,7 +3,7 @@ package commands
 import (
 	"fmt"
 
-	"github.com/ploycloud/ploy-cli/src/utils"
+	"github.com/ploycloud/ploy-server-cli/src/utils"
 	"github.com/spf13/cobra"
 )
 
