@@ -27,15 +27,18 @@ mkdir -p "$BUILD_DIR"
 
 # Function to build for a specific OS and architecture
 build() {
-    os=$1
-    arch=$2
-    output="${BUILD_DIR}/${BINARY_NAME}-${SERVER_TYPE}-${os}-${arch}"
+    local os=$1
+    local arch=$2
+    local output="${BUILD_DIR}/${BINARY_NAME}-${SERVER_TYPE}-${os}-${arch}"
     if [ "$os" = "windows" ]; then
         output="${output}.exe"
     fi
 
     echo "Building ${SERVER_TYPE} version for ${os}/${arch}..."
-    GOOS=$os GOARCH=$arch go build -ldflags "${LDFLAGS}" -o "${output}" .
+    if ! GOOS=$os GOARCH=$arch go build -ldflags "${LDFLAGS}" -o "${output}" .; then
+        echo "Failed to build for ${os}/${arch}"
+        exit 1
+    fi
 
     if [ "$os" = "windows" ]; then
         zip "${output}.zip" "${output}"
