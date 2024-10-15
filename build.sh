@@ -2,11 +2,44 @@
 
 set -e
 
-# Get the version from the tag or use "dev" if not set
-VERSION=${GITHUB_REF_NAME:-dev}
+# Function to get the latest tag from GitHub
+get_latest_tag() {
+    git fetch --tags
+    git describe --tags --abbrev=0
+}
+
+# Function to increment minor version
+increment_minor_version() {
+    local version=$1
+    local major=$(echo "$version" | cut -d. -f1)
+    local minor=$(echo "$version" | cut -d. -f2)
+    local patch=$(echo "$version" | cut -d. -f3)
+    
+    new_minor=$((minor + 1))
+    echo "${major}.${new_minor}.0-dev"
+}
+
+# Check if --dev flag is passed
+if [[ "$1" == "--dev" ]]; then
+    DEV_BUILD=true
+    shift
+else
+    DEV_BUILD=false
+fi
+
+# Determine the version
+LATEST_TAG=$(get_latest_tag)
+if [ "$DEV_BUILD" = true ]; then
+    VERSION=$(increment_minor_version "$LATEST_TAG")
+else
+    VERSION=$LATEST_TAG
+fi
 
 # Remove 'v' prefix if present
 VERSION=${VERSION#v}
+
+# Update CurrentCliVersion in vars.go
+sed -i '' "s/const CurrentCliVersion = .*/const CurrentCliVersion = \"$VERSION\"/" src/common/vars.go
 
 # Set binary name
 BINARY_NAME="ploy"
@@ -34,7 +67,7 @@ build() {
         output="${output}.exe"
     fi
 
-    echo "Building ${SERVER_TYPE} version for ${os}/${arch}..."
+    echo "Building ${SERVER_TYPE} version ${VERSION} for ${os}/${arch}..."
     if ! GOOS=$os GOARCH=$arch go build -ldflags "${LDFLAGS}" -o "${output}" .; then
         echo "Failed to build for ${os}/${arch}"
         exit 1
@@ -68,4 +101,4 @@ else
 fi
 cd ..
 
-echo "Build completed successfully for ${SERVER_TYPE} server. Artifacts are in the '$BUILD_DIR' directory."
+echo "Build completed successfully for ${SERVER_TYPE} server version ${VERSION}. Artifacts are in the '$BUILD_DIR' directory."
