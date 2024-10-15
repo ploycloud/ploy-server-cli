@@ -18,9 +18,12 @@ func GetGOOS() string {
 }
 
 func CaptureOutput(f func()) string {
-	old := os.Stdout
+	oldStdout := os.Stdout
+	oldStderr := os.Stderr
 	r, w, _ := os.Pipe()
+
 	os.Stdout = w
+	os.Stderr = w
 
 	outC := make(chan string)
 	var wg sync.WaitGroup
@@ -36,6 +39,7 @@ func CaptureOutput(f func()) string {
 	f()
 	w.Close()
 
-	os.Stdout = old
+	os.Stdout = oldStdout
+	os.Stderr = oldStderr
 	return <-outC
 }
