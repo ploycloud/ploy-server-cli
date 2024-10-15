@@ -33,7 +33,8 @@ func init() {
 	ServicesCmd.AddCommand(globalStartCmd)
 	ServicesCmd.AddCommand(globalStopCmd)
 	ServicesCmd.AddCommand(globalRestartCmd)
-	ServicesCmd.AddCommand(installNginxProxyCmd)
+	ServicesCmd.AddCommand(installCmd)
+	installCmd.AddCommand(installNginxProxyCmd)
 }
 
 var globalStartCmd = &cobra.Command{
@@ -92,8 +93,14 @@ var globalRestartCmd = &cobra.Command{
 	},
 }
 
+var installCmd = &cobra.Command{
+	Use:   "install",
+	Short: "Install various services",
+	Long:  `Install services such as nginx-proxy, and potentially others in the future.`,
+}
+
 var installNginxProxyCmd = &cobra.Command{
-	Use:   "install nginx-proxy",
+	Use:   "nginx-proxy",
 	Short: "Install Nginx as a proxy on the host machine",
 	Run: func(cmd *cobra.Command, args []string) {
 		if GetGOOS() == "darwin" {

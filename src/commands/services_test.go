@@ -144,7 +144,7 @@ func TestInstallNginxProxyCmd(t *testing.T) {
 			mockExecCommand = tc.nginxCmd
 
 			output := CaptureOutput(func() {
-				installNginxProxyCmd.Run(&cobra.Command{}, []string{})
+				installNginxProxyCmd.Run(installNginxProxyCmd, []string{})
 			})
 
 			t.Logf("Full output:\n%s", output)
