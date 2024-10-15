@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"sync"
 )
 
 var MockGOOS string
@@ -21,12 +22,20 @@ func CaptureOutput(f func()) string {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
+	outC := make(chan string)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		var buf bytes.Buffer
+		wg.Done()
+		io.Copy(&buf, r)
+		outC <- buf.String()
+	}()
+
+	wg.Wait()
 	f()
-
 	w.Close()
-	os.Stdout = old
 
-	var buf bytes.Buffer
-	io.Copy(&buf, r)
-	return buf.String()
+	os.Stdout = old
+	return <-outC
 }

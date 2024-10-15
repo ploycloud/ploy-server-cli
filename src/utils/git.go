@@ -7,7 +7,8 @@ import (
 	"github.com/go-git/go-git/v5"
 )
 
-func CloneRepo(url string) error {
+// CloneRepo clones a git repository
+var CloneRepo = func(url string) error {
 	fmt.Printf("Cloning repository: %s\n", url)
 
 	_, err := git.PlainClone("./temp", false, &git.CloneOptions{
