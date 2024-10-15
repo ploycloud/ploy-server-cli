@@ -14,6 +14,10 @@ import (
 
 const globalCompose = common.GlobalCompose
 
+var execCommand = exec.Command
+
+var osExit = os.Exit
+
 var ServicesCmd = &cobra.Command{
 	Use:   "services",
 	Short: "Manage Global Docker Compose services",
@@ -21,6 +25,11 @@ var ServicesCmd = &cobra.Command{
 }
 
 func init() {
+	// Disable color output for tests
+	if os.Getenv("GO_TEST") == "1" {
+		color.NoColor = true
+	}
+
 	ServicesCmd.AddCommand(globalStartCmd)
 	ServicesCmd.AddCommand(globalStopCmd)
 	ServicesCmd.AddCommand(globalRestartCmd)
@@ -33,16 +42,16 @@ var globalStartCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Starting global services (mysql, redis, nginx-proxy)...")
 		if err := docker.RunCompose(globalCompose, "up", "-d"); err != nil {
-			color.Red("Error starting global services: %v", err)
-			os.Exit(1)
+			fmt.Printf("Error starting global services: %v\n", err)
+			osExit(1)
 			return
 		}
 
 		if err := docker.RunCompose(globalCompose, "ps"); err != nil {
-			color.Red("Error checking status of global services: %v", err)
+			fmt.Printf("Error checking status of global services: %v\n", err)
 		}
 
-		color.Green("Global services started successfully")
+		fmt.Println("Global services started successfully")
 	},
 }
 
@@ -52,10 +61,11 @@ var globalStopCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Stopping global services...")
 		if err := docker.RunCompose(globalCompose, "down"); err != nil {
-			color.Red("Error stopping global services:", err)
+			fmt.Printf("Error stopping global services: %v\n", err)
+			return
 		}
 
-		color.Green("Global services stopped successfully")
+		fmt.Println("Global services stopped successfully")
 	},
 }
 
@@ -65,55 +75,76 @@ var globalRestartCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Restarting global services...")
 		if err := docker.RunCompose(globalCompose, "down"); err != nil {
-			color.Red("Error stopping global services:", err)
+			fmt.Printf("Error stopping global services: %v\n", err)
+			return
 		}
 
 		if err := docker.RunCompose(globalCompose, "up", "-d"); err != nil {
-			color.Red("Error starting global services:", err)
+			fmt.Printf("Error starting global services: %v\n", err)
+			return
 		}
 
 		if err := docker.RunCompose(globalCompose, "ps"); err != nil {
-			color.Red("Error checking status of global services:", err)
+			fmt.Printf("Error checking status of global services: %v\n", err)
 		}
 
-		color.Green("Global services restarted successfully")
+		fmt.Println("Global services restarted successfully")
 	},
 }
 
 var installNginxProxyCmd = &cobra.Command{
-	Use:   "install nginx",
-	Short: "Install Nginx Proxy if not already installed",
+	Use:   "install nginx-proxy",
+	Short: "Install Nginx as a proxy on the host machine",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("Checking if Nginx Proxy is already installed...")
-
-		// Check if Nginx Proxy is already running
-		command := exec.Command("docker", "ps", "--filter", "name=nginx-proxy", "--format", "{{.Names}}")
-		output, err := command.Output()
-		if err != nil {
-			color.Red("Error checking Nginx Proxy status: %v", err)
+		if GetGOOS() == "darwin" {
+			fmt.Println("Nginx installation is not supported on macOS. Please install Nginx manually.")
 			return
 		}
 
-		if len(output) > 0 {
-			color.Yellow("Nginx Proxy is already installed and running.")
+		fmt.Println("Checking if Nginx is already installed...")
+
+		// Check if Nginx is already installed
+		checkCmd := execCommand("nginx", "-v")
+		if err := checkCmd.Run(); err == nil {
+			fmt.Println("Nginx is already installed.")
 			return
 		}
 
-		fmt.Println("Installing Nginx Proxy...")
+		fmt.Println("Installing Nginx as a proxy...")
 
-		// Install Nginx Proxy using docker-compose
-		if err := docker.RunCompose(globalCompose, "up", "-d", "nginx-proxy"); err != nil {
-			color.Red("Error installing Nginx Proxy: %v", err)
+		// Install Nginx (this assumes a Debian-based system like Ubuntu)
+		installCmd := execCommand("sudo", "apt-get", "update")
+		installCmd.Stdout = os.Stdout
+		installCmd.Stderr = os.Stderr
+		if err := installCmd.Run(); err != nil {
+			color.Red("Error updating package list: %v", err)
 			return
 		}
 
-		// Verify installation
-		if err := docker.RunCompose(globalCompose, "ps", "nginx-proxy"); err != nil {
-			color.Red("Error verifying Nginx Proxy installation: %v", err)
+		installCmd = execCommand("sudo", "apt-get", "install", "-y", "nginx")
+		installCmd.Stdout = os.Stdout
+		installCmd.Stderr = os.Stderr
+		if err := installCmd.Run(); err != nil {
+			color.Red("Error installing Nginx: %v", err)
 			return
 		}
 
-		color.Green("Nginx Proxy installed and configured successfully")
-		fmt.Println("You can now use it as a proxy for your Docker containers.")
+		// Start Nginx service
+		startCmd := execCommand("sudo", "systemctl", "start", "nginx")
+		if err := startCmd.Run(); err != nil {
+			color.Red("Error starting Nginx service: %v", err)
+			return
+		}
+
+		// Enable Nginx to start on boot
+		enableCmd := execCommand("sudo", "systemctl", "enable", "nginx")
+		if err := enableCmd.Run(); err != nil {
+			color.Red("Error enabling Nginx service: %v", err)
+			return
+		}
+
+		fmt.Println("Nginx installed and configured successfully as a proxy")
+		fmt.Println("You can now configure Nginx as a proxy for your Docker containers.")
+		fmt.Println("Don't forget to configure your Nginx configuration file to proxy requests to your Docker containers.")
 	},
 }

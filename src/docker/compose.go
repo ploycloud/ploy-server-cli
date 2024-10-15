@@ -2,9 +2,10 @@ package docker
 
 import (
 	"fmt"
-	"gopkg.in/yaml.v2"
 	"os"
 	"os/exec"
+
+	"gopkg.in/yaml.v2"
 )
 
 // ComposeConfig represents the Docker Compose configuration
@@ -17,7 +18,9 @@ func isInteractive() bool {
 	return (fileInfo.Mode() & os.ModeCharDevice) != 0
 }
 
-func RunCompose(composePath string, args ...string) error {
+var RunCompose = runCompose
+
+func runCompose(composePath string, args ...string) error {
 	baseArgs := []string{"compose", "-f", composePath}
 
 	// Check if 'exec' is the first argument and add -T if not interactive
