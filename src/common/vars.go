@@ -1,6 +1,6 @@
 package common
 
-const CurrentCliVersion = "0.2.0"
+const CurrentCliVersion = "0.3.0"
 
 const HomeDir = "/home/ploy"
 const ServicesDir = HomeDir + "/.ploy"
