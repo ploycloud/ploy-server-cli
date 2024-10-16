@@ -4,7 +4,7 @@
 log() {
     local level=$1
     shift
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - [$level] - $*" | tee -a /var/logs/ploy-setup.log
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - [$level] - $*" | tee -a /var/log/ploy-setup.log
 }
 
 log "INFO" "Starting Ploy server setup"
@@ -52,9 +52,29 @@ chown -R ploy:ploy /home/ploy/sites
 
 # Install and configure unattended-upgrades
 log "INFO" "Installing and configuring unattended-upgrades"
-if ! apt-get install -y unattended-upgrades || ! dpkg-reconfigure -plow unattended-upgrades; then
-    log "ERROR" "Failed to install and configure unattended-upgrades"
-    exit 1
+if ! apt-get install -y unattended-upgrades; then
+    log "ERROR" "Failed to install unattended-upgrades"
+    # Continue with the script instead of exiting
+else
+    log "INFO" "Successfully installed unattended-upgrades"
+    
+    # Configure unattended-upgrades non-interactively
+    if ! echo 'Unattended-Upgrade::Allowed-Origins {
+        "${distro_id}:${distro_codename}";
+        "${distro_id}:${distro_codename}-security";
+    };' | sudo tee /etc/apt/apt.conf.d/50unattended-upgrades > /dev/null; then
+        log "ERROR" "Failed to configure unattended-upgrades"
+    else
+        log "INFO" "Successfully configured unattended-upgrades"
+    fi
+    
+    # Enable unattended-upgrades
+    if ! echo 'APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";' | sudo tee /etc/apt/apt.conf.d/20auto-upgrades > /dev/null; then
+        log "ERROR" "Failed to enable unattended-upgrades"
+    else
+        log "INFO" "Successfully enabled unattended-upgrades"
+    fi
 fi
 
 # Install Ploy Server CLI
