@@ -79,7 +79,7 @@ fi
 
 # Install Ploy Server CLI
 log "INFO" "Installing Ploy Server CLI"
-if ! curl -fsSL https://raw.githubusercontent.com/cloudoploy/ploy-server-cli/main/install.sh | bash; then
+if ! curl -fsSL https://raw.githubusercontent.com/ploycloud/ploy-server-cli/main/install.sh | bash; then
     log "ERROR" "Failed to install Ploy Server CLI"
     exit 1
 fi
