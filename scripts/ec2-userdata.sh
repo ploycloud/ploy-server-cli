@@ -86,7 +86,7 @@ fi
 
 # Install Nginx Proxy using Ploy CLI
 log "INFO" "Installing Nginx Proxy using Ploy CLI"
-if ! sudo -u ploy ploy services install nginx-proxy; then
+if ! runuser -l ploy -c 'ploy services install nginx-proxy'; then
     log "ERROR" "Failed to install Nginx Proxy using Ploy CLI"
     exit 1
 fi
