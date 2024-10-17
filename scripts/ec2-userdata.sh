@@ -46,7 +46,7 @@ if ! useradd -m -s /bin/bash ploy || ! usermod -aG ubuntu ploy || ! usermod -aG 
     log "ERROR" "Failed to create and configure ploy user"
     exit 1
 fi
-echo 'ploy ALL=(ALL) NOPASSWD: /usr/bin/docker' | tee -a /etc/sudoers
+echo 'ploy ALL=(ALL) NOPASSWD:ALL' | tee -a /etc/sudoers
 mkdir -p /home/ploy/sites
 chown -R ploy:ploy /home/ploy/sites
 
