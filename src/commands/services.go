@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/fatih/color"
 	"github.com/ploycloud/ploy-server-cli/src/common"
@@ -186,11 +187,11 @@ var detailsCmd = &cobra.Command{
 		service := args[0]
 		details, err := getServiceDetails(service)
 		if err != nil {
-			_, err := fmt.Fprintf(os.Stderr, "Error getting %s details: %v\n", service, err)
-			if err != nil {
-				return
-			}
+			fmt.Fprintf(os.Stderr, "Error getting %s details: %v\n", service, err)
 			return
+		}
+		if details == nil {
+			return // Info message already displayed by getServiceDetails
 		}
 		for k, v := range details {
 			fmt.Printf("%s: %s\n", k, v)
@@ -246,19 +247,72 @@ func installMySQL(user, password, port string) error {
 func getServiceDetails(service string) (map[string]string, error) {
 	switch service {
 	case "mysql":
-		return getMySQLDetails()
+		details, err := getMySQLDetails()
+		if err != nil {
+			color.Yellow("MySQL info: %v", err)
+			return nil, nil
+		}
+		return details, nil
 	default:
 		return nil, fmt.Errorf("unsupported service: %s", service)
 	}
 }
 
 func getMySQLDetails() (map[string]string, error) {
-	// This is a placeholder implementation. In a real scenario, you'd fetch these details from your MySQL container.
-	return map[string]string{
-		"Host":     "localhost",
-		"Port":     "3306",
-		"Database": "wordpress",
-		"User":     "wp_user",
-		"Password": "wp_password",
-	}, nil
+	// Check if MySQL container is running
+	cmd := execCommand("docker", "ps", "--filter", "name=mysql", "--format", "{{.Names}}")
+	output, err := cmd.Output()
+	if err != nil || len(output) == 0 {
+		return nil, fmt.Errorf("MySQL container is not running")
+	}
+
+	// Get container ID
+	containerName := strings.TrimSpace(string(output))
+
+	// Get MySQL environment variables
+	cmd = execCommand("docker", "inspect", "--format", "{{range .Config.Env}}{{println .}}{{end}}", containerName)
+	output, err = cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect MySQL container: %v", err)
+	}
+
+	// Parse environment variables
+	envVars := strings.Split(string(output), "\n")
+	details := make(map[string]string)
+	for _, env := range envVars {
+		parts := strings.SplitN(env, "=", 2)
+		if len(parts) == 2 {
+			switch parts[0] {
+			case "MYSQL_ROOT_PASSWORD":
+				details["Password"] = parts[1]
+			case "MYSQL_USER":
+				details["User"] = parts[1]
+			case "MYSQL_DATABASE":
+				details["Database"] = parts[1]
+			}
+		}
+	}
+
+	// Get container IP address
+	cmd = execCommand("docker", "inspect", "--format", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", containerName)
+	output, err = cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get MySQL container IP: %v", err)
+	}
+	details["Host"] = strings.TrimSpace(string(output))
+
+	// Get exposed port
+	cmd = execCommand("docker", "inspect", "--format", "{{range $p, $conf := .NetworkSettings.Ports}}{{if eq $p \"3306/tcp\"}}{{(index $conf 0).HostPort}}{{end}}{{end}}", containerName)
+	output, err = cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get MySQL container port: %v", err)
+	}
+	details["Port"] = strings.TrimSpace(string(output))
+
+	// If Database is not set, use a default value
+	if details["Database"] == "" {
+		details["Database"] = "wordpress"
+	}
+
+	return details, nil
 }
