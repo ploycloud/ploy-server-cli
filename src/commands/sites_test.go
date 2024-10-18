@@ -124,7 +124,7 @@ services:
 	}
 
 	// Test static scaling
-	err = launchSite("wp", "example.com", "external", "db.example.com", "3306", "wordpress", "user", "password", "static", 2, 0)
+	err = launchSite("wp", "example.com", "external", "db.example.com", "3306", "wordpress", "user", "password", "static", 2, 0, "", "")
 	assert.NoError(t, err)
 
 	composePath := filepath.Join(tempDir, "example.com", "docker-compose.yml")
@@ -136,8 +136,23 @@ services:
 	assert.Contains(t, string(content), "replicas: 2")
 	assert.Contains(t, string(content), "traefik.http.routers.example.com.rule=Host(`example.com`)")
 
+	// Test static scaling with siteID and hostname
+	err = launchSite("wp", "example.com", "external", "db.example.com", "3306", "wordpress", "user", "password", "static", 2, 0, "site123", "host.example.com")
+	assert.NoError(t, err)
+
+	composePath = filepath.Join(tempDir, "example.com", "docker-compose.yml")
+	content, err = ioutil.ReadFile(composePath)
+	assert.NoError(t, err)
+
+	assert.Contains(t, string(content), "image: wordpress:latest")
+	assert.Contains(t, string(content), "WORDPRESS_DB_HOST: db.example.com:3306")
+	assert.Contains(t, string(content), "replicas: 2")
+	assert.Contains(t, string(content), "traefik.http.routers.example.com.rule=Host(`example.com`)")
+	assert.Contains(t, string(content), "SITE_ID: site123")
+	assert.Contains(t, string(content), "HOSTNAME: host.example.com")
+
 	// Test dynamic scaling
-	err = launchSite("wp", "dynamic.com", "external", "db.example.com", "3306", "wordpress", "user", "password", "dynamic", 2, 5)
+	err = launchSite("wp", "dynamic.com", "external", "db.example.com", "3306", "wordpress", "user", "password", "dynamic", 2, 5, "", "")
 	assert.NoError(t, err)
 
 	composePath = filepath.Join(tempDir, "dynamic.com", "docker-compose.yml")

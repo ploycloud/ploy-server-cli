@@ -42,6 +42,8 @@ func init() {
 	sitesNewCmd.Flags().Int("replicas", 1, "Number of replicas")
 	sitesNewCmd.Flags().Int("max_replicas", 0, "Maximum number of replicas (required for dynamic scaling)")
 	sitesNewCmd.Flags().String("webhook", "", "Webhook URL for progress updates (optional)")
+	sitesNewCmd.Flags().String("site_id", "", "Unique identifier for the site (optional)")
+	sitesNewCmd.Flags().String("hostname", "", "Hostname for the site (optional)")
 }
 
 var sitesStartCmd = &cobra.Command{
@@ -161,22 +163,26 @@ func runNewSite(cmd *cobra.Command, args []string) {
 	siteType, _ := cmd.Flags().GetString("type")
 	domain, _ := cmd.Flags().GetString("domain")
 	dbSource, _ := cmd.Flags().GetString("db_source")
-	dbHost, _ := cmd.Flags().GetString("db_host")
-	dbPort, _ := cmd.Flags().GetString("db_port")
-	dbName, _ := cmd.Flags().GetString("db_name")
-	dbUser, _ := cmd.Flags().GetString("db_user")
-	dbPassword, _ := cmd.Flags().GetString("db_password")
 	scalingType, _ := cmd.Flags().GetString("scaling_type")
 	replicas, _ := cmd.Flags().GetInt("replicas")
 	maxReplicas, _ := cmd.Flags().GetInt("max_replicas")
 	webhook, _ := cmd.Flags().GetString("webhook")
+	siteID, _ := cmd.Flags().GetString("site_id")
+	hostname, _ := cmd.Flags().GetString("hostname")
 
 	// Validate and prompt for missing required fields
 	siteType = promptIfEmpty(siteType, "Enter site type (wp):", "wp")
 	domain = promptIfEmpty(domain, "Enter domain or subdomain:", "")
 	dbSource = promptIfEmpty(dbSource, "Enter database source (internal/external):", "internal")
 
+	var dbHost, dbPort, dbName, dbUser, dbPassword string
 	if dbSource == "external" {
+		dbHost, _ = cmd.Flags().GetString("db_host")
+		dbPort, _ = cmd.Flags().GetString("db_port")
+		dbName, _ = cmd.Flags().GetString("db_name")
+		dbUser, _ = cmd.Flags().GetString("db_user")
+		dbPassword, _ = cmd.Flags().GetString("db_password")
+
 		dbHost = promptIfEmpty(dbHost, "Enter database host:", "")
 		dbPort = promptIfEmpty(dbPort, "Enter database port:", "")
 		dbName = promptIfEmpty(dbName, "Enter database name:", "")
@@ -204,7 +210,7 @@ func runNewSite(cmd *cobra.Command, args []string) {
 	}
 
 	// Launch the site
-	if err := launchSite(siteType, domain, dbSource, dbHost, dbPort, dbName, dbUser, dbPassword, scalingType, replicas, maxReplicas); err != nil {
+	if err := launchSite(siteType, domain, dbSource, dbHost, dbPort, dbName, dbUser, dbPassword, scalingType, replicas, maxReplicas, siteID, hostname); err != nil {
 		color.Red("Error launching site: %v", err)
 		return
 	}
@@ -278,7 +284,7 @@ func setupInternalMySQL() error {
 	return nil
 }
 
-func launchSite(siteType, domain, dbSource, dbHost, dbPort, dbName, dbUser, dbPassword, scalingType string, replicas, maxReplicas int) error {
+func launchSite(siteType, domain, dbSource, dbHost, dbPort, dbName, dbUser, dbPassword, scalingType string, replicas, maxReplicas int, siteID, hostname string) error {
 	// Get MySQL details if using internal database
 	if dbSource == "internal" {
 		mysqlDetails, err := getServiceDetails("mysql")
@@ -312,6 +318,14 @@ func launchSite(siteType, domain, dbSource, dbHost, dbPort, dbName, dbUser, dbPa
 	composeContent = strings.ReplaceAll(composeContent, "${DB_PASSWORD}", dbPassword)
 	composeContent = strings.ReplaceAll(composeContent, "${DOMAIN}", domain)
 	composeContent = strings.ReplaceAll(composeContent, "${REPLICAS}", fmt.Sprintf("%d", replicas))
+
+	// Add siteID and hostname to the environment variables if provided
+	if siteID != "" {
+		composeContent = strings.ReplaceAll(composeContent, "environment:", fmt.Sprintf("environment:\n      SITE_ID: %s", siteID))
+	}
+	if hostname != "" {
+		composeContent = strings.ReplaceAll(composeContent, "environment:", fmt.Sprintf("environment:\n      HOSTNAME: %s", hostname))
+	}
 
 	// Write the Docker Compose file
 	composeFilePath := filepath.Join(os.Getenv("HOME"), domain, "docker-compose.yml")
