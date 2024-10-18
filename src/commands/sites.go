@@ -13,6 +13,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/ploycloud/ploy-server-cli/src/common"
 	"github.com/ploycloud/ploy-server-cli/src/docker"
+	"github.com/ploycloud/ploy-server-cli/src/github"
 	"github.com/spf13/cobra"
 )
 
@@ -80,6 +81,8 @@ var sitesNewCmd = &cobra.Command{
 	Long:  `Launch a new site with specified parameters`,
 	Run:   runNewSite,
 }
+
+var getDockerComposeTemplate = github.GetDockerComposeTemplate
 
 func startAllSites() {
 	sitesDir := common.HomeDir
@@ -290,15 +293,15 @@ func launchSite(siteType, domain, dbSource, dbHost, dbPort, dbName, dbUser, dbPa
 	}
 
 	// Choose the appropriate Docker Compose template
-	templatePath := filepath.Join(os.Getenv("HOME"), "docker", "wp", "wp-compose-static.yml")
+	templateFilename := "wp/wp-compose-static.yml"
 	if scalingType == "dynamic" {
-		templatePath = filepath.Join(os.Getenv("HOME"), "docker", "wp", "wp-compose-dynamic.yml")
+		templateFilename = "wp/wp-compose-dynamic.yml"
 	}
 
-	// Read the Docker Compose template
-	templateContent, err := ioutil.ReadFile(templatePath)
+	// Fetch the Docker Compose template from GitHub
+	templateContent, err := getDockerComposeTemplate(templateFilename)
 	if err != nil {
-		return fmt.Errorf("failed to read Docker Compose template: %v", err)
+		return fmt.Errorf("failed to fetch Docker Compose template: %v", err)
 	}
 
 	// Replace placeholders in the template

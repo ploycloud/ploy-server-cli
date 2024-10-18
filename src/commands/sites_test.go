@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -100,6 +101,20 @@ services:
 `
 	err = ioutil.WriteFile(dynamicTemplatePath, []byte(dynamicTemplateContent), 0644)
 	assert.NoError(t, err)
+
+	// Mock the GitHub fetching function
+	oldGetDockerComposeTemplate := getDockerComposeTemplate
+	getDockerComposeTemplate = func(filename string) ([]byte, error) {
+		if filename == "wp/wp-compose-static.yml" {
+			return []byte(staticTemplateContent), nil
+		} else if filename == "wp/wp-compose-dynamic.yml" {
+			return []byte(dynamicTemplateContent), nil
+		}
+		return nil, fmt.Errorf("unknown template: %s", filename)
+	}
+	defer func() {
+		getDockerComposeTemplate = oldGetDockerComposeTemplate
+	}()
 
 	// Mock the execCommand function
 	oldExecCommand := execCommand
