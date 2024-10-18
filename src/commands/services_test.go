@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"testing"
@@ -58,6 +59,22 @@ func setupTest() {
 	}
 	exitCalled = false
 	exitCode = 0
+}
+
+func createMockMySQLComposeFile() {
+	content := `version: '3'
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "${MYSQL_PORT}:3306"
+`
+	os.MkdirAll("docker/databases", 0755)
+	ioutil.WriteFile("docker/databases/mysql-compose.yml", []byte(content), 0644)
 }
 
 func TestGlobalStartCmd(t *testing.T) {
@@ -164,21 +181,56 @@ func TestInstallNginxProxyCmd(t *testing.T) {
 
 func TestInstallMySQLCmd(t *testing.T) {
 	setupTest()
+	createMockMySQLComposeFile()
+	defer os.RemoveAll("docker")
 
-	// Mock the docker-compose command
-	mockExecCommand = func(name string, arg ...string) *exec.Cmd {
-		return exec.Command("echo", "MySQL installed successfully")
+	testCases := []struct {
+		name     string
+		args     []string
+		expected string
+	}{
+		{
+			name:     "Default installation",
+			args:     []string{},
+			expected: "MySQL installed successfully",
+		},
+		{
+			name:     "Custom user and password",
+			args:     []string{"--user=testuser", "--password=testpass"},
+			expected: "MySQL installed successfully",
+		},
+		{
+			name:     "Custom port",
+			args:     []string{"--port=3307"},
+			expected: "MySQL installed successfully",
+		},
 	}
 
-	// Capture output
-	output := CaptureOutput(
-		func() {
-			installMySQLCmd.Run(installMySQLCmd, []string{})
-		},
-	)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Mock the docker-compose command
+			mockExecCommand = func(name string, arg ...string) *exec.Cmd {
+				return exec.Command("echo", "MySQL installed successfully")
+			}
 
-	assert.Contains(t, output, "Installing MySQL service...")
-	assert.Contains(t, output, "MySQL installed successfully")
+			// Create a new command and set flags
+			cmd := &cobra.Command{}
+			cmd.Flags().String("user", "default_user", "MySQL user")
+			cmd.Flags().String("password", "default_password", "MySQL password")
+			cmd.Flags().String("port", "3306", "MySQL port")
+
+			// Parse flags
+			cmd.ParseFlags(tc.args)
+
+			// Capture output
+			output := CaptureOutput(func() {
+				installMySQLCmd.Run(cmd, []string{})
+			})
+
+			assert.Contains(t, output, "Installing MySQL service...")
+			assert.Contains(t, output, tc.expected)
+		})
+	}
 }
 
 func TestDetailsCmd(t *testing.T) {

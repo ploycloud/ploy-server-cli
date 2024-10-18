@@ -1,7 +1,9 @@
 package commands
 
 import (
+	"bytes"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -161,9 +163,14 @@ var installNginxProxyCmd = &cobra.Command{
 var installMySQLCmd = &cobra.Command{
 	Use:   "mysql",
 	Short: "Install MySQL service",
+	Long:  `Install MySQL service with optional parameters for user, password, and port.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		user, _ := cmd.Flags().GetString("user")
+		password, _ := cmd.Flags().GetString("password")
+		port, _ := cmd.Flags().GetString("port")
+
 		fmt.Println("Installing MySQL service...")
-		if err := installMySQL(); err != nil {
+		if err := installMySQL(user, password, port); err != nil {
 			color.Red("Error installing MySQL: %v", err)
 			return
 		}
@@ -191,12 +198,49 @@ var detailsCmd = &cobra.Command{
 	},
 }
 
-func installMySQL() error {
+func init() {
+	// Add flags for MySQL installation
+	installMySQLCmd.Flags().String("user", "default_user", "MySQL user")
+	installMySQLCmd.Flags().String("password", "default_password", "MySQL password")
+	installMySQLCmd.Flags().String("port", "3306", "MySQL port")
+}
+
+func installMySQL(user, password, port string) error {
 	composePath := filepath.Join("docker", "databases", "mysql-compose.yml")
-	cmd := execCommand("docker-compose", "-f", composePath, "up", "-d")
+
+	// Read the compose file
+	content, err := os.ReadFile(composePath)
+	if err != nil {
+		return fmt.Errorf("failed to read MySQL compose file: %v", err)
+	}
+
+	// Replace placeholders with provided or default values
+	replacements := map[string]string{
+		"${MYSQL_USER}":     user,
+		"${MYSQL_PASSWORD}": password,
+		"${MYSQL_PORT}":     port,
+	}
+
+	for placeholder, value := range replacements {
+		content = bytes.ReplaceAll(content, []byte(placeholder), []byte(value))
+	}
+
+	// Write the updated compose file
+	tempComposePath := filepath.Join(os.TempDir(), "temp-mysql-compose.yml")
+	if err := ioutil.WriteFile(tempComposePath, content, 0644); err != nil {
+		return fmt.Errorf("failed to write temporary MySQL compose file: %v", err)
+	}
+
+	// Run docker-compose with the updated file
+	cmd := execCommand("docker-compose", "-f", tempComposePath, "up", "-d")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	err = cmd.Run()
+
+	// Clean up the temporary file
+	os.Remove(tempComposePath)
+
+	return err
 }
 
 func getServiceDetails(service string) (map[string]string, error) {

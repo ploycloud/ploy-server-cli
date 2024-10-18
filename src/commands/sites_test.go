@@ -1,6 +1,10 @@
 package commands
 
 import (
+	"io/ioutil"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -40,12 +44,96 @@ func TestValidateInputs(t *testing.T) {
 	}
 }
 
-func TestGenerateDockerComposeContent(t *testing.T) {
-	content := generateDockerComposeContent("wp", "example.com", "db", "3306", "wordpress", "user", "password", "static", 2, 0)
-	assert.Contains(t, content, "image: wordpress:latest")
-	assert.Contains(t, content, "WORDPRESS_DB_HOST: db:3306")
-	assert.Contains(t, content, "replicas: 2")
-	assert.Contains(t, content, "traefik.http.routers.example.com.rule=Host(`example.com`)")
+func TestLaunchSite(t *testing.T) {
+	// Create a temporary directory for the test
+	tempDir, err := ioutil.TempDir("", "test_launch_site")
+	assert.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	// Set up test environment
+	oldHomeDir := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", oldHomeDir)
+
+	// Create mock Docker Compose templates
+	dockerDir := filepath.Join(tempDir, "docker", "wp")
+	err = os.MkdirAll(dockerDir, 0755)
+	assert.NoError(t, err)
+
+	staticTemplatePath := filepath.Join(dockerDir, "wp-compose-static.yml")
+	dynamicTemplatePath := filepath.Join(dockerDir, "wp-compose-dynamic.yml")
+
+	staticTemplateContent := `
+version: '3'
+services:
+  wordpress:
+    image: wordpress:latest
+    environment:
+      WORDPRESS_DB_HOST: ${DB_HOST}:${DB_PORT}
+      WORDPRESS_DB_NAME: ${DB_NAME}
+      WORDPRESS_DB_USER: ${DB_USER}
+      WORDPRESS_DB_PASSWORD: ${DB_PASSWORD}
+    deploy:
+      replicas: ${REPLICAS}
+    labels:
+      - "traefik.http.routers.${DOMAIN}.rule=Host(` + "`${DOMAIN}`" + `)"
+`
+	err = ioutil.WriteFile(staticTemplatePath, []byte(staticTemplateContent), 0644)
+	assert.NoError(t, err)
+
+	dynamicTemplateContent := `
+version: '3'
+services:
+  wordpress:
+    image: wordpress:latest
+    environment:
+      WORDPRESS_DB_HOST: ${DB_HOST}:${DB_PORT}
+      WORDPRESS_DB_NAME: ${DB_NAME}
+      WORDPRESS_DB_USER: ${DB_USER}
+      WORDPRESS_DB_PASSWORD: ${DB_PASSWORD}
+    deploy:
+      replicas: ${REPLICAS}
+      update_config:
+        parallelism: 1
+    labels:
+      - "traefik.http.routers.${DOMAIN}.rule=Host(` + "`${DOMAIN}`" + `)"
+`
+	err = ioutil.WriteFile(dynamicTemplatePath, []byte(dynamicTemplateContent), 0644)
+	assert.NoError(t, err)
+
+	// Mock the execCommand function
+	oldExecCommand := execCommand
+	defer func() { execCommand = oldExecCommand }()
+	execCommand = func(name string, arg ...string) *exec.Cmd {
+		return exec.Command("echo", "Mock command executed")
+	}
+
+	// Test static scaling
+	err = launchSite("wp", "example.com", "external", "db.example.com", "3306", "wordpress", "user", "password", "static", 2, 0)
+	assert.NoError(t, err)
+
+	composePath := filepath.Join(tempDir, "example.com", "docker-compose.yml")
+	content, err := ioutil.ReadFile(composePath)
+	assert.NoError(t, err)
+
+	assert.Contains(t, string(content), "image: wordpress:latest")
+	assert.Contains(t, string(content), "WORDPRESS_DB_HOST: db.example.com:3306")
+	assert.Contains(t, string(content), "replicas: 2")
+	assert.Contains(t, string(content), "traefik.http.routers.example.com.rule=Host(`example.com`)")
+
+	// Test dynamic scaling
+	err = launchSite("wp", "dynamic.com", "external", "db.example.com", "3306", "wordpress", "user", "password", "dynamic", 2, 5)
+	assert.NoError(t, err)
+
+	composePath = filepath.Join(tempDir, "dynamic.com", "docker-compose.yml")
+	content, err = ioutil.ReadFile(composePath)
+	assert.NoError(t, err)
+
+	assert.Contains(t, string(content), "image: wordpress:latest")
+	assert.Contains(t, string(content), "WORDPRESS_DB_HOST: db.example.com:3306")
+	assert.Contains(t, string(content), "replicas: 2")
+	assert.Contains(t, string(content), "update_config:")
+	assert.Contains(t, string(content), "traefik.http.routers.dynamic.com.rule=Host(`dynamic.com`)")
 }
 
 // Add more tests for other functions as needed...

@@ -290,9 +290,9 @@ func launchSite(siteType, domain, dbSource, dbHost, dbPort, dbName, dbUser, dbPa
 	}
 
 	// Choose the appropriate Docker Compose template
-	templatePath := "docker/wp/wp-compose-static.yml"
+	templatePath := filepath.Join(os.Getenv("HOME"), "docker", "wp", "wp-compose-static.yml")
 	if scalingType == "dynamic" {
-		templatePath = "docker/wp/wp-compose-dynamic.yml"
+		templatePath = filepath.Join(os.Getenv("HOME"), "docker", "wp", "wp-compose-dynamic.yml")
 	}
 
 	// Read the Docker Compose template
@@ -311,7 +311,7 @@ func launchSite(siteType, domain, dbSource, dbHost, dbPort, dbName, dbUser, dbPa
 	composeContent = strings.ReplaceAll(composeContent, "${REPLICAS}", fmt.Sprintf("%d", replicas))
 
 	// Write the Docker Compose file
-	composeFilePath := filepath.Join(common.HomeDir, domain, "docker-compose.yml")
+	composeFilePath := filepath.Join(os.Getenv("HOME"), domain, "docker-compose.yml")
 	if err := os.MkdirAll(filepath.Dir(composeFilePath), 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %v", err)
 	}
