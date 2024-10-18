@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	"github.com/fatih/color"
-
 	"github.com/ploycloud/ploy-server-cli/src/common"
 	"github.com/ploycloud/ploy-server-cli/src/docker"
 	"github.com/spf13/cobra"
@@ -34,7 +34,9 @@ func init() {
 	ServicesCmd.AddCommand(globalStopCmd)
 	ServicesCmd.AddCommand(globalRestartCmd)
 	ServicesCmd.AddCommand(installCmd)
+	ServicesCmd.AddCommand(detailsCmd)
 	installCmd.AddCommand(installNginxProxyCmd)
+	installCmd.AddCommand(installMySQLCmd)
 }
 
 var globalStartCmd = &cobra.Command{
@@ -154,4 +156,65 @@ var installNginxProxyCmd = &cobra.Command{
 		fmt.Println("You can now configure Nginx as a proxy for your Docker containers.")
 		fmt.Println("Don't forget to configure your Nginx configuration file to proxy requests to your Docker containers.")
 	},
+}
+
+var installMySQLCmd = &cobra.Command{
+	Use:   "mysql",
+	Short: "Install MySQL service",
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println("Installing MySQL service...")
+		if err := installMySQL(); err != nil {
+			color.Red("Error installing MySQL: %v", err)
+			return
+		}
+		color.Green("MySQL installed successfully")
+	},
+}
+
+var detailsCmd = &cobra.Command{
+	Use:   "details [service]",
+	Short: "Show details for a specific service",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		service := args[0]
+		details, err := getServiceDetails(service)
+		if err != nil {
+			_, err := fmt.Fprintf(os.Stderr, "Error getting %s details: %v\n", service, err)
+			if err != nil {
+				return
+			}
+			return
+		}
+		for k, v := range details {
+			fmt.Printf("%s: %s\n", k, v)
+		}
+	},
+}
+
+func installMySQL() error {
+	composePath := filepath.Join("docker", "databases", "mysql-compose.yml")
+	cmd := execCommand("docker-compose", "-f", composePath, "up", "-d")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+func getServiceDetails(service string) (map[string]string, error) {
+	switch service {
+	case "mysql":
+		return getMySQLDetails()
+	default:
+		return nil, fmt.Errorf("unsupported service: %s", service)
+	}
+}
+
+func getMySQLDetails() (map[string]string, error) {
+	// This is a placeholder implementation. In a real scenario, you'd fetch these details from your MySQL container.
+	return map[string]string{
+		"Host":     "localhost",
+		"Port":     "3306",
+		"Database": "wordpress",
+		"User":     "wp_user",
+		"Password": "wp_password",
+	}, nil
 }

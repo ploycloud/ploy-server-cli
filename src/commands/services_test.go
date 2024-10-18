@@ -58,15 +58,16 @@ func setupTest() {
 	}
 	exitCalled = false
 	exitCode = 0
-	MockGOOS = "linux" // Default to Linux
 }
 
 func TestGlobalStartCmd(t *testing.T) {
 	setupTest()
 
-	output := CaptureOutput(func() {
-		globalStartCmd.Run(&cobra.Command{}, []string{})
-	})
+	output := CaptureOutput(
+		func() {
+			globalStartCmd.Run(&cobra.Command{}, []string{})
+		},
+	)
 
 	t.Logf("Full output:\n%s", output)
 	assert.Contains(t, output, "Starting global services (mysql, redis, nginx-proxy)")
@@ -77,9 +78,11 @@ func TestGlobalStartCmd(t *testing.T) {
 func TestGlobalStopCmd(t *testing.T) {
 	setupTest()
 
-	output := CaptureOutput(func() {
-		globalStopCmd.Run(&cobra.Command{}, []string{})
-	})
+	output := CaptureOutput(
+		func() {
+			globalStopCmd.Run(&cobra.Command{}, []string{})
+		},
+	)
 
 	t.Logf("Full output:\n%s", output)
 	assert.Contains(t, output, "Stopping global services")
@@ -90,9 +93,11 @@ func TestGlobalStopCmd(t *testing.T) {
 func TestGlobalRestartCmd(t *testing.T) {
 	setupTest()
 
-	output := CaptureOutput(func() {
-		globalRestartCmd.Run(&cobra.Command{}, []string{})
-	})
+	output := CaptureOutput(
+		func() {
+			globalRestartCmd.Run(&cobra.Command{}, []string{})
+		},
+	)
 
 	t.Logf("Full output:\n%s", output)
 	assert.Contains(t, output, "Restarting global services")
@@ -139,16 +144,61 @@ func TestInstallNginxProxyCmd(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			MockGOOS = tc.goos
-			mockExecCommand = tc.nginxCmd
+		t.Run(
+			tc.name, func(t *testing.T) {
+				MockGOOS = tc.goos
+				mockExecCommand = tc.nginxCmd
 
-			output := CaptureOutput(func() {
-				installNginxProxyCmd.Run(installNginxProxyCmd, []string{})
-			})
+				output := CaptureOutput(
+					func() {
+						installNginxProxyCmd.Run(installNginxProxyCmd, []string{})
+					},
+				)
 
-			t.Logf("Full output:\n%s", output)
-			assert.Contains(t, output, tc.expected)
-		})
+				t.Logf("Full output:\n%s", output)
+				assert.Contains(t, output, tc.expected)
+			},
+		)
 	}
+}
+
+func TestInstallMySQLCmd(t *testing.T) {
+	setupTest()
+
+	// Mock the docker-compose command
+	mockExecCommand = func(name string, arg ...string) *exec.Cmd {
+		return exec.Command("echo", "MySQL installed successfully")
+	}
+
+	// Capture output
+	output := CaptureOutput(
+		func() {
+			installMySQLCmd.Run(installMySQLCmd, []string{})
+		},
+	)
+
+	assert.Contains(t, output, "Installing MySQL service...")
+	assert.Contains(t, output, "MySQL installed successfully")
+}
+
+func TestDetailsCmd(t *testing.T) {
+	setupTest()
+
+	// Test MySQL details
+	stdout, _ := CaptureOutputAndError(func() {
+		detailsCmd.Run(detailsCmd, []string{"mysql"})
+	})
+
+	assert.Contains(t, stdout, "Host: localhost")
+	assert.Contains(t, stdout, "Port: 3306")
+	assert.Contains(t, stdout, "Database: wordpress")
+	assert.Contains(t, stdout, "User: wp_user")
+	assert.Contains(t, stdout, "Password: wp_password")
+
+	// Test unsupported service
+	_, stderr := CaptureOutputAndError(func() {
+		detailsCmd.Run(detailsCmd, []string{"unsupported"})
+	})
+
+	assert.Contains(t, stderr, "Error getting unsupported details: unsupported service: unsupported")
 }
