@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"testing"
@@ -58,15 +59,32 @@ func setupTest() {
 	}
 	exitCalled = false
 	exitCode = 0
-	MockGOOS = "linux" // Default to Linux
+}
+
+func createMockMySQLComposeFile() {
+	content := `version: '3'
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "${MYSQL_PORT}:3306"
+`
+	os.MkdirAll("docker/databases", 0755)
+	ioutil.WriteFile("docker/databases/mysql-compose.yml", []byte(content), 0644)
 }
 
 func TestGlobalStartCmd(t *testing.T) {
 	setupTest()
 
-	output := CaptureOutput(func() {
-		globalStartCmd.Run(&cobra.Command{}, []string{})
-	})
+	output := CaptureOutput(
+		func() {
+			globalStartCmd.Run(&cobra.Command{}, []string{})
+		},
+	)
 
 	t.Logf("Full output:\n%s", output)
 	assert.Contains(t, output, "Starting global services (mysql, redis, nginx-proxy)")
@@ -77,9 +95,11 @@ func TestGlobalStartCmd(t *testing.T) {
 func TestGlobalStopCmd(t *testing.T) {
 	setupTest()
 
-	output := CaptureOutput(func() {
-		globalStopCmd.Run(&cobra.Command{}, []string{})
-	})
+	output := CaptureOutput(
+		func() {
+			globalStopCmd.Run(&cobra.Command{}, []string{})
+		},
+	)
 
 	t.Logf("Full output:\n%s", output)
 	assert.Contains(t, output, "Stopping global services")
@@ -90,9 +110,11 @@ func TestGlobalStopCmd(t *testing.T) {
 func TestGlobalRestartCmd(t *testing.T) {
 	setupTest()
 
-	output := CaptureOutput(func() {
-		globalRestartCmd.Run(&cobra.Command{}, []string{})
-	})
+	output := CaptureOutput(
+		func() {
+			globalRestartCmd.Run(&cobra.Command{}, []string{})
+		},
+	)
 
 	t.Logf("Full output:\n%s", output)
 	assert.Contains(t, output, "Restarting global services")
@@ -139,16 +161,129 @@ func TestInstallNginxProxyCmd(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			MockGOOS = tc.goos
-			mockExecCommand = tc.nginxCmd
+		t.Run(
+			tc.name, func(t *testing.T) {
+				MockGOOS = tc.goos
+				mockExecCommand = tc.nginxCmd
 
+				output := CaptureOutput(
+					func() {
+						installNginxProxyCmd.Run(installNginxProxyCmd, []string{})
+					},
+				)
+
+				t.Logf("Full output:\n%s", output)
+				assert.Contains(t, output, tc.expected)
+			},
+		)
+	}
+}
+
+func TestInstallMySQLCmd(t *testing.T) {
+	setupTest()
+
+	// Mock the GetDockerComposeTemplate function
+	oldGetDockerComposeTemplate := getDockerComposeTemplate
+	defer func() { getDockerComposeTemplate = oldGetDockerComposeTemplate }()
+	getDockerComposeTemplate = func(filename string) ([]byte, error) {
+		return []byte(`version: '3'
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "${MYSQL_PORT}:3306"
+`), nil
+	}
+
+	testCases := []struct {
+		name     string
+		args     []string
+		expected string
+	}{
+		{
+			name:     "Default installation",
+			args:     []string{},
+			expected: "MySQL installed successfully",
+		},
+		{
+			name:     "Custom user and password",
+			args:     []string{"--user=testuser", "--password=testpass"},
+			expected: "MySQL installed successfully",
+		},
+		{
+			name:     "Custom port",
+			args:     []string{"--port=3307"},
+			expected: "MySQL installed successfully",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Mock the docker-compose command
+			mockExecCommand = func(name string, arg ...string) *exec.Cmd {
+				return exec.Command("echo", "MySQL installed successfully")
+			}
+
+			// Create a new command and set flags
+			cmd := &cobra.Command{}
+			cmd.Flags().String("user", "default_user", "MySQL user")
+			cmd.Flags().String("password", "default_password", "MySQL password")
+			cmd.Flags().String("port", "3306", "MySQL port")
+
+			// Parse flags
+			cmd.ParseFlags(tc.args)
+
+			// Capture output
 			output := CaptureOutput(func() {
-				installNginxProxyCmd.Run(installNginxProxyCmd, []string{})
+				installMySQLCmd.Run(cmd, []string{})
 			})
 
-			t.Logf("Full output:\n%s", output)
+			assert.Contains(t, output, "Installing MySQL service...")
 			assert.Contains(t, output, tc.expected)
 		})
 	}
+}
+
+func TestDetailsCmd(t *testing.T) {
+	setupTest()
+
+	// Mock the execCommand function to return specific output for MySQL details
+	oldExecCommand := execCommand
+	defer func() { execCommand = oldExecCommand }()
+	execCommand = func(name string, arg ...string) *exec.Cmd {
+		cmd := exec.Command("echo", "mysql-container")
+		if name == "docker" && arg[0] == "inspect" {
+			switch arg[2] {
+			case "{{range .Config.Env}}{{println .}}{{end}}":
+				cmd = exec.Command("echo", "MYSQL_ROOT_PASSWORD=wp_password\nMYSQL_USER=wp_user\nMYSQL_DATABASE=wordpress")
+			case "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}":
+				cmd = exec.Command("echo", "172.17.0.2")
+			case "{{range $p, $conf := .NetworkSettings.Ports}}{{if eq $p \"3306/tcp\"}}{{(index $conf 0).HostPort}}{{end}}{{end}}":
+				cmd = exec.Command("echo", "3306")
+			}
+		}
+		return cmd
+	}
+
+	// Test MySQL details
+	stdout, _ := CaptureOutputAndError(func() {
+		detailsCmd.Run(detailsCmd, []string{"mysql"})
+	})
+
+	assert.Contains(t, stdout, "Host: 172.17.0.2")
+	assert.Contains(t, stdout, "Port: 3306")
+	assert.Contains(t, stdout, "Database: wordpress")
+	assert.Contains(t, stdout, "User: wp_user")
+	assert.Contains(t, stdout, "Password: wp_password")
+
+	// Test unsupported service
+	_, stderr := CaptureOutputAndError(func() {
+		detailsCmd.Run(detailsCmd, []string{"unsupported"})
+	})
+
+	assert.Contains(t, stderr, "Error getting unsupported details: unsupported service: unsupported")
 }

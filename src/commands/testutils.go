@@ -41,5 +41,47 @@ func CaptureOutput(f func()) string {
 
 	os.Stdout = oldStdout
 	os.Stderr = oldStderr
-	return <-outC
+	out := <-outC
+
+	return out
+}
+
+// CaptureOutputAndError New function to capture both stdout and stderr separately
+func CaptureOutputAndError(f func()) (string, string) {
+	oldStdout := os.Stdout
+	oldStderr := os.Stderr
+	rOut, wOut, _ := os.Pipe()
+	rErr, wErr, _ := os.Pipe()
+
+	os.Stdout = wOut
+	os.Stderr = wErr
+
+	outC := make(chan string)
+	errC := make(chan string)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		var buf bytes.Buffer
+		wg.Done()
+		io.Copy(&buf, rOut)
+		outC <- buf.String()
+	}()
+	go func() {
+		var buf bytes.Buffer
+		wg.Done()
+		io.Copy(&buf, rErr)
+		errC <- buf.String()
+	}()
+
+	wg.Wait()
+	f()
+	wOut.Close()
+	wErr.Close()
+
+	os.Stdout = oldStdout
+	os.Stderr = oldStderr
+	stdout := <-outC
+	stderr := <-errC
+
+	return stdout, stderr
 }
