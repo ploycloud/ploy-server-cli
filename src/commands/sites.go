@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -211,7 +210,10 @@ func runNewSite(cmd *cobra.Command, args []string) {
 	}
 
 	// Launch the site
-	if err := launchSite(siteType, domain, dbSource, dbHost, dbPort, dbName, dbUser, dbPassword, scalingType, replicas, maxReplicas, siteID, hostname, phpVersion); err != nil {
+	if err := launchSite(
+		siteType, domain, dbSource, dbHost, dbPort, dbName, dbUser, dbPassword, scalingType, replicas, maxReplicas,
+		siteID, hostname, phpVersion,
+	); err != nil {
 		color.Red("Error launching site: %v", err)
 		return
 	}
@@ -285,7 +287,10 @@ func setupInternalMySQL() error {
 	return nil
 }
 
-func launchSite(siteType, domain, dbSource, dbHost, dbPort, dbName, dbUser, dbPassword, scalingType string, replicas, maxReplicas int, siteID, hostname, phpVersion string) error {
+func launchSite(
+	siteType, domain, dbSource, dbHost, dbPort, dbName, dbUser, dbPassword, scalingType string,
+	replicas, maxReplicas int, siteID, hostname, phpVersion string,
+) error {
 	// Get MySQL details if using internal database
 	if dbSource == "internal" {
 		mysqlDetails, err := getServiceDetails("mysql")
@@ -328,23 +333,33 @@ func launchSite(siteType, domain, dbSource, dbHost, dbPort, dbName, dbUser, dbPa
 
 	// Add hostname and PHP version to the WordPress container name
 	if hostname != "" {
-		composeContent = strings.ReplaceAll(composeContent, "container_name: wp-${HOSTNAME}-php${PHP_VERSION}", fmt.Sprintf("container_name: wp-%s-php%s", hostname, phpVersion))
+		composeContent = strings.ReplaceAll(
+			composeContent, "container_name: wp-${HOSTNAME}-php${PHP_VERSION}",
+			fmt.Sprintf("container_name: wp-%s-php%s", hostname, phpVersion),
+		)
 	}
 
 	// Add siteID and hostname to the environment variables if provided
 	if siteID != "" {
-		composeContent = strings.ReplaceAll(composeContent, "environment:", fmt.Sprintf("environment:\n      SITE_ID: %s", siteID))
+		composeContent = strings.ReplaceAll(
+			composeContent, "environment:", fmt.Sprintf("environment:\n      SITE_ID: %s", siteID),
+		)
 	}
 	if hostname != "" {
-		composeContent = strings.ReplaceAll(composeContent, "environment:", fmt.Sprintf("environment:\n      HOSTNAME: %s", hostname))
+		composeContent = strings.ReplaceAll(
+			composeContent, "environment:", fmt.Sprintf("environment:\n      HOSTNAME: %s", hostname),
+		)
 	}
 
-	// Write the Docker Compose file
-	composeFilePath := filepath.Join(os.Getenv("HOME"), domain, "docker-compose.yml")
-	if err := os.MkdirAll(filepath.Dir(composeFilePath), 0755); err != nil {
-		return fmt.Errorf("failed to create directory: %v", err)
+	// Create the site directory
+	siteDir := filepath.Join(common.SitesDir, hostname)
+	if err := os.MkdirAll(siteDir, 0755); err != nil {
+		return fmt.Errorf("failed to create site directory: %v", err)
 	}
-	if err := ioutil.WriteFile(composeFilePath, []byte(composeContent), 0644); err != nil {
+
+	// Write the Docker Compose file to the site directory
+	composeFilePath := filepath.Join(siteDir, "docker-compose.yml")
+	if err := os.WriteFile(composeFilePath, []byte(composeContent), 0644); err != nil {
 		return fmt.Errorf("failed to write docker-compose file: %v", err)
 	}
 

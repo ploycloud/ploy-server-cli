@@ -10,6 +10,7 @@ const CurrentCliVersion = "0.4.0"
 var (
 	HomeDir       = os.Getenv("HOME")
 	ServicesDir   = filepath.Join(HomeDir, ".ploy")
+	SitesDir      = filepath.Join(ServicesDir, "sites")
 	GlobalCompose = filepath.Join(ServicesDir, "docker-compose.yml")
 	ProvisionsDir = filepath.Join(ServicesDir, "provisions")
 	MysqlDir      = filepath.Join(ServicesDir, "database", "mysql")

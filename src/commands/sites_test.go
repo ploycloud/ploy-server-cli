@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/ploycloud/ploy-server-cli/src/common"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -51,9 +52,9 @@ func TestLaunchSite(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Set up test environment
-	oldHomeDir := os.Getenv("HOME")
-	os.Setenv("HOME", tempDir)
-	defer os.Setenv("HOME", oldHomeDir)
+	oldSitesDir := common.SitesDir
+	common.SitesDir = tempDir
+	defer func() { common.SitesDir = oldSitesDir }()
 
 	// Mock the getDockerComposeTemplate function
 	oldGetDockerComposeTemplate := getDockerComposeTemplate
@@ -73,10 +74,13 @@ func TestLaunchSite(t *testing.T) {
 	err = launchSite("wp", "example.com", "external", "db.example.com", "3306", "wordpress", "user", "password", "static", 2, 0, "site123", "host.example.com", "8.3")
 	assert.NoError(t, err)
 
-	// Check if the Docker Compose file was created
-	composePath := filepath.Join(tempDir, "example.com", "docker-compose.yml")
-	_, err = os.Stat(composePath)
-	assert.NoError(t, err, "Docker Compose file should exist")
+	// Check if the site directory was created
+	siteDir := filepath.Join(tempDir, "host.example.com")
+	assert.DirExists(t, siteDir, "Site directory should exist")
+
+	// Check if the Docker Compose file was created in the site directory
+	composePath := filepath.Join(siteDir, "docker-compose.yml")
+	assert.FileExists(t, composePath, "Docker Compose file should exist in the site directory")
 
 	// Read the content of the Docker Compose file
 	content, err := ioutil.ReadFile(composePath)
