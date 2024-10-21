@@ -207,10 +207,10 @@ func init() {
 }
 
 func installMySQL(user, password, port string) error {
-	composePath := filepath.Join("docker", "databases", "mysql-compose.yml")
+	composePath := docker.MySQLComposeTemplate
 
 	// Read the compose file
-	content, err := os.ReadFile(composePath)
+	content, err := getDockerComposeTemplate(composePath)
 	if err != nil {
 		return fmt.Errorf("failed to read MySQL compose file: %v", err)
 	}

@@ -181,8 +181,23 @@ func TestInstallNginxProxyCmd(t *testing.T) {
 
 func TestInstallMySQLCmd(t *testing.T) {
 	setupTest()
-	createMockMySQLComposeFile()
-	defer os.RemoveAll("docker")
+
+	// Mock the GetDockerComposeTemplate function
+	oldGetDockerComposeTemplate := getDockerComposeTemplate
+	defer func() { getDockerComposeTemplate = oldGetDockerComposeTemplate }()
+	getDockerComposeTemplate = func(filename string) ([]byte, error) {
+		return []byte(`version: '3'
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "${MYSQL_PORT}:3306"
+`), nil
+	}
 
 	testCases := []struct {
 		name     string
@@ -207,33 +222,29 @@ func TestInstallMySQLCmd(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(
-			tc.name, func(t *testing.T) {
-				// Mock the docker-compose command
-				mockExecCommand = func(name string, arg ...string) *exec.Cmd {
-					return exec.Command("echo", "MySQL installed successfully")
-				}
+		t.Run(tc.name, func(t *testing.T) {
+			// Mock the docker-compose command
+			mockExecCommand = func(name string, arg ...string) *exec.Cmd {
+				return exec.Command("echo", "MySQL installed successfully")
+			}
 
-				// Create a new command and set flags
-				cmd := &cobra.Command{}
-				cmd.Flags().String("user", "default_user", "MySQL user")
-				cmd.Flags().String("password", "default_password", "MySQL password")
-				cmd.Flags().String("port", "3306", "MySQL port")
+			// Create a new command and set flags
+			cmd := &cobra.Command{}
+			cmd.Flags().String("user", "default_user", "MySQL user")
+			cmd.Flags().String("password", "default_password", "MySQL password")
+			cmd.Flags().String("port", "3306", "MySQL port")
 
-				// Parse flags
-				cmd.ParseFlags(tc.args)
+			// Parse flags
+			cmd.ParseFlags(tc.args)
 
-				// Capture output
-				output := CaptureOutput(
-					func() {
-						installMySQLCmd.Run(cmd, []string{})
-					},
-				)
+			// Capture output
+			output := CaptureOutput(func() {
+				installMySQLCmd.Run(cmd, []string{})
+			})
 
-				assert.Contains(t, output, "Installing MySQL service...")
-				assert.Contains(t, output, tc.expected)
-			},
-		)
+			assert.Contains(t, output, "Installing MySQL service...")
+			assert.Contains(t, output, tc.expected)
+		})
 	}
 }
 

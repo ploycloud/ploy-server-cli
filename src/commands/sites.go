@@ -13,7 +13,6 @@ import (
 	"github.com/fatih/color"
 	"github.com/ploycloud/ploy-server-cli/src/common"
 	"github.com/ploycloud/ploy-server-cli/src/docker"
-	"github.com/ploycloud/ploy-server-cli/src/github"
 	"github.com/spf13/cobra"
 )
 
@@ -84,7 +83,7 @@ var sitesNewCmd = &cobra.Command{
 	Run:   runNewSite,
 }
 
-var getDockerComposeTemplate = github.GetDockerComposeTemplate
+var getDockerComposeTemplate = docker.GetDockerComposeTemplate
 
 func startAllSites() {
 	sitesDir := common.HomeDir
@@ -299,9 +298,9 @@ func launchSite(siteType, domain, dbSource, dbHost, dbPort, dbName, dbUser, dbPa
 	}
 
 	// Choose the appropriate Docker Compose template
-	templateFilename := "wp/wp-compose-static.yml"
+	templateFilename := docker.WPComposeStaticTemplate
 	if scalingType == "dynamic" {
-		templateFilename = "wp/wp-compose-dynamic.yml"
+		templateFilename = docker.WPComposeDynamicTemplate
 	}
 
 	// Fetch the Docker Compose template from GitHub

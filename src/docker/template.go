@@ -1,4 +1,4 @@
-package github
+package docker
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	rawGitHubURL = "https://raw.githubusercontent.com/ploycloud/ploy-server-cli/main/src/assets/docker/"
+	rawGitHubURL = "https://raw.githubusercontent.com/ploycloud/ploy-server-cli/main/docker/"
 )
 
 func GetDockerComposeTemplate(filename string) ([]byte, error) {
@@ -24,3 +24,10 @@ func GetDockerComposeTemplate(filename string) ([]byte, error) {
 
 	return ioutil.ReadAll(resp.Body)
 }
+
+// Docker Compose template references
+const (
+	WPComposeStaticTemplate  = "wp/wp-compose-static.yml"
+	WPComposeDynamicTemplate = "wp/wp-compose-dynamic.yml"
+	MySQLComposeTemplate     = "databases/mysql-compose.yml"
+)

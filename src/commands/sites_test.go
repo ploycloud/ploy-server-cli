@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/ploycloud/ploy-server-cli/src/docker"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -105,9 +106,9 @@ services:
 	// Mock the GitHub fetching function
 	oldGetDockerComposeTemplate := getDockerComposeTemplate
 	getDockerComposeTemplate = func(filename string) ([]byte, error) {
-		if filename == "wp/wp-compose-static.yml" {
+		if filename == docker.WPComposeStaticTemplate {
 			return []byte(staticTemplateContent), nil
-		} else if filename == "wp/wp-compose-dynamic.yml" {
+		} else if filename == docker.WPComposeDynamicTemplate {
 			return []byte(dynamicTemplateContent), nil
 		}
 		return nil, fmt.Errorf("unknown template: %s", filename)
