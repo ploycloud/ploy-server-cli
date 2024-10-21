@@ -318,6 +318,11 @@ func launchSite(siteType, domain, dbSource, dbHost, dbPort, dbName, dbUser, dbPa
 	composeContent = strings.ReplaceAll(composeContent, "${DOMAIN}", domain)
 	composeContent = strings.ReplaceAll(composeContent, "${REPLICAS}", fmt.Sprintf("%d", replicas))
 
+	// Add hostname to the WordPress image name
+	if hostname != "" {
+		composeContent = strings.ReplaceAll(composeContent, "image: wordpress:latest", fmt.Sprintf("image: wordpress:latest\n    container_name: wp-%s", hostname))
+	}
+
 	// Add siteID and hostname to the environment variables if provided
 	if siteID != "" {
 		composeContent = strings.ReplaceAll(composeContent, "environment:", fmt.Sprintf("environment:\n      SITE_ID: %s", siteID))

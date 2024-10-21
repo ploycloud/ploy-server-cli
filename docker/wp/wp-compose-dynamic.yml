@@ -2,38 +2,15 @@ version: '3'
 services:
   wordpress:
     image: wordpress:latest
-    restart: always
+    container_name: wp-${HOSTNAME}
     environment:
       WORDPRESS_DB_HOST: ${DB_HOST}:${DB_PORT}
       WORDPRESS_DB_NAME: ${DB_NAME}
       WORDPRESS_DB_USER: ${DB_USER}
       WORDPRESS_DB_PASSWORD: ${DB_PASSWORD}
-    volumes:
-      - ./wp-content:/var/www/html/wp-content
     deploy:
       replicas: ${REPLICAS}
       update_config:
         parallelism: 1
-        order: rolling_update
-      rollback_config:
-        parallelism: 1
-        order: rolling_update
-      mode: replicated
-      placement:
-        constraints: [node.role == worker]
-      resources:
-        limits:
-          cpus: '0.50'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 256M
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 3
-        window: 120s
     labels:
-      - "traefik.enable=true"
       - "traefik.http.routers.${DOMAIN}.rule=Host(`${DOMAIN}`)"
-      - "traefik.http.services.${DOMAIN}.loadbalancer.server.port=80"

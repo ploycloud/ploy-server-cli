@@ -2,6 +2,7 @@ version: '3'
 services:
   wordpress:
     image: wordpress:latest
+    container_name: wp-${HOSTNAME}
     restart: always
     environment:
       WORDPRESS_DB_HOST: ${DB_HOST}:${DB_PORT}
