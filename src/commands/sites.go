@@ -43,6 +43,7 @@ func init() {
 	sitesNewCmd.Flags().String("webhook", "", "Webhook URL for progress updates (optional)")
 	sitesNewCmd.Flags().String("site_id", "", "Unique identifier for the site (optional)")
 	sitesNewCmd.Flags().String("hostname", "", "Hostname for the site (optional)")
+	sitesNewCmd.Flags().String("php_version", "8.3", "PHP version for WordPress (default: 8.3)")
 }
 
 var sitesStartCmd = &cobra.Command{
@@ -168,6 +169,7 @@ func runNewSite(cmd *cobra.Command, args []string) {
 	webhook, _ := cmd.Flags().GetString("webhook")
 	siteID, _ := cmd.Flags().GetString("site_id")
 	hostname, _ := cmd.Flags().GetString("hostname")
+	phpVersion, _ := cmd.Flags().GetString("php_version")
 
 	// Validate and prompt for missing required fields
 	siteType = promptIfEmpty(siteType, "Enter site type (wp):", "wp")
@@ -209,7 +211,7 @@ func runNewSite(cmd *cobra.Command, args []string) {
 	}
 
 	// Launch the site
-	if err := launchSite(siteType, domain, dbSource, dbHost, dbPort, dbName, dbUser, dbPassword, scalingType, replicas, maxReplicas, siteID, hostname); err != nil {
+	if err := launchSite(siteType, domain, dbSource, dbHost, dbPort, dbName, dbUser, dbPassword, scalingType, replicas, maxReplicas, siteID, hostname, phpVersion); err != nil {
 		color.Red("Error launching site: %v", err)
 		return
 	}
@@ -283,7 +285,7 @@ func setupInternalMySQL() error {
 	return nil
 }
 
-func launchSite(siteType, domain, dbSource, dbHost, dbPort, dbName, dbUser, dbPassword, scalingType string, replicas, maxReplicas int, siteID, hostname string) error {
+func launchSite(siteType, domain, dbSource, dbHost, dbPort, dbName, dbUser, dbPassword, scalingType string, replicas, maxReplicas int, siteID, hostname, phpVersion string) error {
 	// Get MySQL details if using internal database
 	if dbSource == "internal" {
 		mysqlDetails, err := getServiceDetails("mysql")
@@ -309,6 +311,11 @@ func launchSite(siteType, domain, dbSource, dbHost, dbPort, dbName, dbUser, dbPa
 		return fmt.Errorf("failed to fetch Docker Compose template: %v", err)
 	}
 
+	// If phpVersion is not provided, use the default
+	if phpVersion == "" {
+		phpVersion = "8.3"
+	}
+
 	// Replace placeholders in the template
 	composeContent := strings.ReplaceAll(string(templateContent), "${DB_HOST}", dbHost)
 	composeContent = strings.ReplaceAll(composeContent, "${DB_PORT}", dbPort)
@@ -317,10 +324,11 @@ func launchSite(siteType, domain, dbSource, dbHost, dbPort, dbName, dbUser, dbPa
 	composeContent = strings.ReplaceAll(composeContent, "${DB_PASSWORD}", dbPassword)
 	composeContent = strings.ReplaceAll(composeContent, "${DOMAIN}", domain)
 	composeContent = strings.ReplaceAll(composeContent, "${REPLICAS}", fmt.Sprintf("%d", replicas))
+	composeContent = strings.ReplaceAll(composeContent, "${PHP_VERSION}", phpVersion)
 
-	// Add hostname to the WordPress image name
+	// Add hostname and PHP version to the WordPress container name
 	if hostname != "" {
-		composeContent = strings.ReplaceAll(composeContent, "image: wordpress:latest", fmt.Sprintf("image: wordpress:latest\n    container_name: wp-%s", hostname))
+		composeContent = strings.ReplaceAll(composeContent, "container_name: wp-${HOSTNAME}-php${PHP_VERSION}", fmt.Sprintf("container_name: wp-%s-php%s", hostname, phpVersion))
 	}
 
 	// Add siteID and hostname to the environment variables if provided
