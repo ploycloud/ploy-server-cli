@@ -255,19 +255,24 @@ func TestDetailsCmd(t *testing.T) {
 	oldExecCommand := execCommand
 	defer func() { execCommand = oldExecCommand }()
 	execCommand = func(name string, arg ...string) *exec.Cmd {
-		cs := []string{"-test.run=TestHelperProcess", "--", name}
-		cs = append(cs, arg...)
-		cmd := exec.Command(os.Args[0], cs...)
-		cmd.Env = []string{"GO_WANT_HELPER_PROCESS=1"}
+		cmd := exec.Command("echo", "mysql-container")
+		if name == "docker" && arg[0] == "inspect" {
+			switch arg[2] {
+			case "{{range .Config.Env}}{{println .}}{{end}}":
+				cmd = exec.Command("echo", "MYSQL_ROOT_PASSWORD=wp_password\nMYSQL_USER=wp_user\nMYSQL_DATABASE=wordpress")
+			case "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}":
+				cmd = exec.Command("echo", "172.17.0.2")
+			case "{{range $p, $conf := .NetworkSettings.Ports}}{{if eq $p \"3306/tcp\"}}{{(index $conf 0).HostPort}}{{end}}{{end}}":
+				cmd = exec.Command("echo", "3306")
+			}
+		}
 		return cmd
 	}
 
 	// Test MySQL details
-	stdout, _ := CaptureOutputAndError(
-		func() {
-			detailsCmd.Run(detailsCmd, []string{"mysql"})
-		},
-	)
+	stdout, _ := CaptureOutputAndError(func() {
+		detailsCmd.Run(detailsCmd, []string{"mysql"})
+	})
 
 	assert.Contains(t, stdout, "Host: 172.17.0.2")
 	assert.Contains(t, stdout, "Port: 3306")
@@ -276,57 +281,9 @@ func TestDetailsCmd(t *testing.T) {
 	assert.Contains(t, stdout, "Password: wp_password")
 
 	// Test unsupported service
-	_, stderr := CaptureOutputAndError(
-		func() {
-			detailsCmd.Run(detailsCmd, []string{"unsupported"})
-		},
-	)
+	_, stderr := CaptureOutputAndError(func() {
+		detailsCmd.Run(detailsCmd, []string{"unsupported"})
+	})
 
 	assert.Contains(t, stderr, "Error getting unsupported details: unsupported service: unsupported")
-}
-
-// TestHelperProcess isn't a real test. It's used to mock command execution.
-func TestHelperProcess(t *testing.T) {
-	if os.Getenv("GO_WANT_HELPER_PROCESS") != "1" {
-		return
-	}
-	defer os.Exit(0)
-
-	args := os.Args
-	for len(args) > 0 {
-		if args[0] == "--" {
-			args = args[1:]
-			break
-		}
-		args = args[1:]
-	}
-
-	if len(args) == 0 {
-		fmt.Fprintf(os.Stderr, "No command\n")
-		os.Exit(2)
-	}
-
-	cmd, args := args[0], args[1:]
-	switch cmd {
-	case "docker":
-		if args[0] == "ps" {
-			fmt.Println("mysql-container")
-		} else if args[0] == "inspect" {
-			if args[1] == "--format" {
-				switch args[2] {
-				case "{{range .Config.Env}}{{println .}}{{end}}":
-					fmt.Println("MYSQL_ROOT_PASSWORD=wp_password")
-					fmt.Println("MYSQL_USER=wp_user")
-					fmt.Println("MYSQL_DATABASE=wordpress")
-				case "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}":
-					fmt.Println("172.17.0.2")
-				case "{{range $p, $conf := .NetworkSettings.Ports}}{{if eq $p \"3306/tcp\"}}{{(index $conf 0).HostPort}}{{end}}{{end}}":
-					fmt.Println("3306")
-				}
-			}
-		}
-	default:
-		fmt.Fprintf(os.Stderr, "Unknown command %q\n", cmd)
-		os.Exit(2)
-	}
 }

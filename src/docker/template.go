@@ -6,12 +6,12 @@ import (
 	"net/http"
 )
 
-const (
-	rawGitHubURL = "https://raw.githubusercontent.com/ploycloud/ploy-server-cli/main/docker/"
-)
+var getGitHubURL = func() string {
+	return "https://raw.githubusercontent.com/ploycloud/ploy-server-cli/main/docker/"
+}
 
 func GetDockerComposeTemplate(filename string) ([]byte, error) {
-	url := rawGitHubURL + filename
+	url := getGitHubURL() + filename
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch template from GitHub: %v", err)

@@ -15,8 +15,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const globalCompose = common.GlobalCompose
-
 var execCommand = exec.Command
 
 var osExit = os.Exit
@@ -47,13 +45,13 @@ var globalStartCmd = &cobra.Command{
 	Short: "Start global services",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Starting global services (mysql, redis, nginx-proxy)...")
-		if err := docker.RunCompose(globalCompose, "up", "-d"); err != nil {
+		if err := docker.RunCompose(common.GlobalCompose, "up", "-d"); err != nil {
 			fmt.Printf("Error starting global services: %v\n", err)
 			osExit(1)
 			return
 		}
 
-		if err := docker.RunCompose(globalCompose, "ps"); err != nil {
+		if err := docker.RunCompose(common.GlobalCompose, "ps"); err != nil {
 			fmt.Printf("Error checking status of global services: %v\n", err)
 		}
 
@@ -66,7 +64,7 @@ var globalStopCmd = &cobra.Command{
 	Short: "Stop global services",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Stopping global services...")
-		if err := docker.RunCompose(globalCompose, "down"); err != nil {
+		if err := docker.RunCompose(common.GlobalCompose, "down"); err != nil {
 			fmt.Printf("Error stopping global services: %v\n", err)
 			return
 		}
@@ -80,17 +78,17 @@ var globalRestartCmd = &cobra.Command{
 	Short: "Restart global services",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Restarting global services...")
-		if err := docker.RunCompose(globalCompose, "down"); err != nil {
+		if err := docker.RunCompose(common.GlobalCompose, "down"); err != nil {
 			fmt.Printf("Error stopping global services: %v\n", err)
 			return
 		}
 
-		if err := docker.RunCompose(globalCompose, "up", "-d"); err != nil {
+		if err := docker.RunCompose(common.GlobalCompose, "up", "-d"); err != nil {
 			fmt.Printf("Error starting global services: %v\n", err)
 			return
 		}
 
-		if err := docker.RunCompose(globalCompose, "ps"); err != nil {
+		if err := docker.RunCompose(common.GlobalCompose, "ps"); err != nil {
 			fmt.Printf("Error checking status of global services: %v\n", err)
 		}
 

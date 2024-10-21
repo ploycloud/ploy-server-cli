@@ -8,6 +8,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var runWpCli = docker.RunWpCli
+
 var WpCmd = &cobra.Command{
 	Use:   "wp",
 	Short: "Execute WP-CLI commands",
@@ -19,7 +21,7 @@ var WpCmd = &cobra.Command{
 			return
 		}
 
-		if err := docker.RunWpCli(composePath, args); err != nil {
+		if err := runWpCli(composePath, args); err != nil {
 			color.Red("Error running wp-cli: %s", err)
 		}
 	},
