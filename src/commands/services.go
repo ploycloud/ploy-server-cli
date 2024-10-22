@@ -38,6 +38,7 @@ func init() {
 	ServicesCmd.AddCommand(detailsCmd)
 	installCmd.AddCommand(installNginxProxyCmd)
 	installCmd.AddCommand(installMySQLCmd)
+	ServicesCmd.AddCommand(statusCmd)
 }
 
 var globalStartCmd = &cobra.Command{
@@ -313,4 +314,46 @@ func getMySQLDetails() (map[string]string, error) {
 	}
 
 	return details, nil
+}
+
+var statusCmd = &cobra.Command{
+	Use:   "status [service]",
+	Short: "Check status of services",
+	Long:  `Check status of services like mysql and nginx-proxy.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		if len(args) == 0 {
+			// If no service specified, check all
+			checkServiceStatus("mysql")
+			checkServiceStatus("nginx-proxy")
+		} else {
+			for _, service := range args {
+				checkServiceStatus(service)
+			}
+		}
+	},
+}
+
+func checkServiceStatus(service string) {
+	var cmd *exec.Cmd
+	switch service {
+	case "mysql":
+		cmd = execCommand("docker", "ps", "--filter", "name=mysql", "--format", "{{.Status}}")
+	case "nginx-proxy":
+		cmd = execCommand("systemctl", "is-active", "nginx")
+	default:
+		fmt.Printf("Unknown service: %s\n", service)
+		return
+	}
+
+	output, err := cmd.Output()
+	if err != nil {
+		color.Red("%s is not running", service)
+	} else {
+		status := strings.TrimSpace(string(output))
+		if status == "active" || strings.HasPrefix(status, "Up") {
+			color.Green("%s is running", service)
+		} else {
+			color.Red("%s is not running", service)
+		}
+	}
 }

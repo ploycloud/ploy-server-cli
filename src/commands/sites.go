@@ -212,18 +212,13 @@ func runNewSite(cmd *cobra.Command, args []string) {
 	// Launch the site
 	if err := launchSite(
 		siteType, domain, dbSource, dbHost, dbPort, dbName, dbUser, dbPassword, scalingType, replicas, maxReplicas,
-		siteID, hostname, phpVersion,
+		siteID, hostname, phpVersion, webhook,
 	); err != nil {
 		color.Red("Error launching site: %v", err)
 		return
 	}
 
 	color.Green("Site launched successfully!")
-
-	// Send webhook if provided
-	if webhook != "" {
-		sendWebhook(webhook, "Site launched successfully")
-	}
 }
 
 func promptIfEmpty(value, prompt, defaultValue string) string {
@@ -289,12 +284,30 @@ func setupInternalMySQL() error {
 
 func launchSite(
 	siteType, domain, dbSource, dbHost, dbPort, dbName, dbUser, dbPassword, scalingType string,
-	replicas, maxReplicas int, siteID, hostname, phpVersion string,
+	replicas, maxReplicas int, siteID, hostname, phpVersion string, webhook string,
 ) error {
 	// Get MySQL details if using internal database
 	if dbSource == "internal" {
+		sendWebhook(webhook, "Checking MySQL status...")
+		mysqlStatus, err := checkMySQLStatus()
+		if err != nil {
+			sendWebhook(webhook, fmt.Sprintf("Error checking MySQL status: %v", err))
+			return err
+		}
+
+		if !mysqlStatus {
+			sendWebhook(webhook, "MySQL is not running. Installing MySQL...")
+			if err := installMySQL("default_user", "default_password", "3306"); err != nil {
+				sendWebhook(webhook, fmt.Sprintf("Error installing MySQL: %v", err))
+				return err
+			}
+			sendWebhook(webhook, "MySQL installed successfully.")
+		}
+
+		sendWebhook(webhook, "Fetching MySQL details...")
 		mysqlDetails, err := getServiceDetails("mysql")
 		if err != nil {
+			sendWebhook(webhook, fmt.Sprintf("Error fetching MySQL details: %v", err))
 			return err
 		}
 		dbHost = mysqlDetails["Host"]
@@ -358,7 +371,8 @@ func launchSite(
 	}
 
 	// Write the Docker Compose file to the site directory
-	composeFilePath := filepath.Join(siteDir, "docker-compose.yml")
+	composeFileName := fmt.Sprintf("docker-compose-wp-php%s.yml", phpVersion)
+	composeFilePath := filepath.Join(siteDir, composeFileName)
 	if err := os.WriteFile(composeFilePath, []byte(composeContent), 0644); err != nil {
 		return fmt.Errorf("failed to write docker-compose file: %v", err)
 	}
@@ -371,10 +385,23 @@ func launchSite(
 		return fmt.Errorf("failed to launch site: %v", err)
 	}
 
+	sendWebhook(webhook, "Site launched successfully!")
 	return nil
 }
 
+func checkMySQLStatus() (bool, error) {
+	cmd := execCommand("ploy", "services", "status", "mysql")
+	output, err := cmd.Output()
+	if err != nil {
+		return false, err
+	}
+	return strings.Contains(string(output), "is running"), nil
+}
+
 func sendWebhook(url, message string) {
+	if url == "" {
+		return
+	}
 	payload, _ := json.Marshal(map[string]string{"message": message})
 	resp, err := http.Post(url, "application/json", strings.NewReader(string(payload)))
 	if err != nil {
@@ -382,4 +409,7 @@ func sendWebhook(url, message string) {
 		return
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		color.Yellow("Webhook response status: %s", resp.Status)
+	}
 }
