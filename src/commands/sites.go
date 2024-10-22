@@ -219,6 +219,11 @@ func runNewSite(cmd *cobra.Command, args []string) {
 	}
 
 	color.Green("Site launched successfully!")
+
+	// Send webhook if provided
+	if webhook != "" {
+		sendWebhook(webhook, "Site launched successfully")
+	}
 }
 
 func promptIfEmpty(value, prompt, defaultValue string) string {
