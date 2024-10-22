@@ -71,7 +71,7 @@ func TestLaunchSite(t *testing.T) {
 	defer func() { execCommand = oldExecCommand }()
 
 	// Test launching a site
-	err = launchSite("wp", "example.com", "external", "db.example.com", "3306", "wordpress", "user", "password", "static", 2, 0, "site123", "host.example.com", "8.3")
+	err = launchSite("wp", "example.com", "external", "db.example.com", "3306", "wordpress", "user", "password", "static", 2, 0, "site123", "host.example.com", "8.3", "")
 	assert.NoError(t, err)
 
 	// Check if the site directory was created
@@ -79,7 +79,7 @@ func TestLaunchSite(t *testing.T) {
 	assert.DirExists(t, siteDir, "Site directory should exist")
 
 	// Check if the Docker Compose file was created in the site directory
-	composePath := filepath.Join(siteDir, "docker-compose.yml")
+	composePath := filepath.Join(siteDir, "docker-compose-wp-php8.3.yml")
 	assert.FileExists(t, composePath, "Docker Compose file should exist in the site directory")
 
 	// Read the content of the Docker Compose file
@@ -91,7 +91,7 @@ func TestLaunchSite(t *testing.T) {
 
 	// Check if the Docker Compose command was executed
 	assert.Contains(t, CaptureOutput(func() {
-		launchSite("wp", "example.com", "external", "db.example.com", "3306", "wordpress", "user", "password", "static", 2, 0, "site123", "host.example.com", "8.3")
+		launchSite("wp", "example.com", "external", "db.example.com", "3306", "wordpress", "user", "password", "static", 2, 0, "site123", "host.example.com", "8.3", "")
 	}), "Mock command executed", "Docker Compose command should be executed")
 }
 
