@@ -170,6 +170,27 @@ func runNewSite(cmd *cobra.Command, args []string) {
 	hostname, _ := cmd.Flags().GetString("hostname")
 	phpVersion, _ := cmd.Flags().GetString("php_version")
 
+	// Set default domain if not provided
+	if domain == "" {
+		if hostname != "" {
+			domain = hostname + ".localhost"
+		} else {
+			domain = "site.localhost"
+		}
+	}
+
+	// Check nginx-proxy status and install if needed
+	if err := setupNginxProxy(webhook); err != nil {
+		color.Red("Error setting up nginx-proxy: %v", err)
+		return
+	}
+
+	// Create nginx configuration
+	if err := createNginxConfig(domain, webhook); err != nil {
+		color.Red("Error creating nginx configuration: %v", err)
+		return
+	}
+
 	// Validate and prompt for missing required fields
 	siteType = promptIfEmpty(siteType, "Enter site type (wp):", "wp")
 	domain = promptIfEmpty(domain, "Enter domain or subdomain:", "")
@@ -291,6 +312,20 @@ func launchSite(
 	siteType, domain, dbSource, dbHost, dbPort, dbName, dbUser, dbPassword, scalingType string,
 	replicas, maxReplicas int, siteID, hostname, phpVersion string, webhook string,
 ) error {
+	// Set default domain if not provided
+	if domain == "" {
+		if hostname != "" {
+			domain = hostname + ".localhost"
+		} else {
+			domain = "site.localhost"
+		}
+	}
+
+	// Create nginx configuration first
+	if err := createNginxConfig(domain, webhook); err != nil {
+		return fmt.Errorf("failed to create nginx configuration: %v", err)
+	}
+
 	// Get MySQL details if using internal database
 	if dbSource == "internal" {
 		sendWebhook(webhook, "Checking MySQL status...")
@@ -417,4 +452,87 @@ func sendWebhook(url, message string) {
 	if resp.StatusCode != http.StatusOK {
 		color.Yellow("Webhook response status: %s", resp.Status)
 	}
+}
+
+func setupNginxProxy(webhook string) error {
+	sendWebhook(webhook, "Checking nginx-proxy status...")
+
+	// Check if nginx-proxy is running
+	cmd := execCommand("ploy", "services", "status", "nginx-proxy")
+	output, err := cmd.Output()
+	if err != nil || !strings.Contains(string(output), "is running") {
+		sendWebhook(webhook, "Installing nginx-proxy...")
+
+		// Install nginx-proxy
+		cmd = execCommand("ploy", "services", "install", "nginx-proxy")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to install nginx-proxy: %v", err)
+		}
+		sendWebhook(webhook, "nginx-proxy installed successfully")
+	}
+
+	return nil
+}
+
+var nginxBasePath = "/etc/nginx"
+
+func createNginxConfig(domain string, webhook string) error {
+	sendWebhook(webhook, "Creating nginx configuration...")
+
+	// Create container name based on domain
+	containerName := strings.ReplaceAll(domain, ".", "-")
+
+	configContent := fmt.Sprintf(`server {
+	listen 80;
+	server_name %s;
+	
+	location / {
+		proxy_pass http://%s:80;
+		proxy_set_header Host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Forwarded-Proto $scheme;
+		proxy_redirect off;
+		proxy_buffering off;
+		
+		# Add WebSocket support
+		proxy_http_version 1.1;
+		proxy_set_header Upgrade $http_upgrade;
+		proxy_set_header Connection "upgrade";
+	}
+}`, domain, containerName)
+
+	// Create nginx sites directory if it doesn't exist
+	nginxSitesDir := filepath.Join(nginxBasePath, "sites-available")
+	if err := os.MkdirAll(nginxSitesDir, 0755); err != nil {
+		return fmt.Errorf("failed to create nginx sites directory: %v", err)
+	}
+
+	// Write nginx configuration
+	configPath := filepath.Join(nginxSitesDir, domain+".conf")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		return fmt.Errorf("failed to write nginx configuration: %v", err)
+	}
+
+	// Create symlink in sites-enabled
+	nginxEnabledDir := filepath.Join(nginxBasePath, "sites-enabled")
+	if err := os.MkdirAll(nginxEnabledDir, 0755); err != nil {
+		return fmt.Errorf("failed to create nginx enabled directory: %v", err)
+	}
+
+	enabledPath := filepath.Join(nginxEnabledDir, domain+".conf")
+	if err := os.Symlink(configPath, enabledPath); err != nil && !os.IsExist(err) {
+		return fmt.Errorf("failed to enable nginx configuration: %v", err)
+	}
+
+	// Reload nginx
+	cmd := execCommand("systemctl", "reload", "nginx")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to reload nginx: %v", err)
+	}
+
+	sendWebhook(webhook, "Nginx configuration created and enabled")
+	return nil
 }
