@@ -224,10 +224,24 @@ func TestCreateNginxConfig(t *testing.T) {
 	content, err := ioutil.ReadFile(configPath)
 	assert.NoError(t, err)
 	assert.Contains(t, string(content), "server_name test.localhost;")
-	assert.Contains(t, string(content), "proxy_pass http://localhost:8080;")
+	assert.Contains(t, string(content), "proxy_pass http://test-localhost:80;")
+	assert.Contains(t, string(content), "proxy_set_header Upgrade $http_upgrade;")
+	assert.Contains(t, string(content), "proxy_set_header Connection \"upgrade\";")
 
 	// Verify symlink
 	linkTarget, err := os.Readlink(enabledPath)
 	assert.NoError(t, err)
 	assert.Equal(t, configPath, linkTarget)
+
+	// Test with subdomain
+	domain = "app.example.com"
+	err = createNginxConfig(domain, "")
+	assert.NoError(t, err)
+
+	// Check config content for subdomain
+	configPath = filepath.Join(tmpDir, "sites-available", domain+".conf")
+	content, err = ioutil.ReadFile(configPath)
+	assert.NoError(t, err)
+	assert.Contains(t, string(content), "server_name app.example.com;")
+	assert.Contains(t, string(content), "proxy_pass http://app-example-com:80;")
 }

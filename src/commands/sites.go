@@ -481,18 +481,28 @@ var nginxBasePath = "/etc/nginx"
 func createNginxConfig(domain string, webhook string) error {
 	sendWebhook(webhook, "Creating nginx configuration...")
 
+	// Create container name based on domain
+	containerName := strings.ReplaceAll(domain, ".", "-")
+
 	configContent := fmt.Sprintf(`server {
 	listen 80;
 	server_name %s;
 	
 	location / {
-		proxy_pass http://localhost:8080;
+		proxy_pass http://%s:80;
 		proxy_set_header Host $host;
 		proxy_set_header X-Real-IP $remote_addr;
 		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 		proxy_set_header X-Forwarded-Proto $scheme;
+		proxy_redirect off;
+		proxy_buffering off;
+		
+		# Add WebSocket support
+		proxy_http_version 1.1;
+		proxy_set_header Upgrade $http_upgrade;
+		proxy_set_header Connection "upgrade";
 	}
-}`, domain)
+}`, domain, containerName)
 
 	// Create nginx sites directory if it doesn't exist
 	nginxSitesDir := filepath.Join(nginxBasePath, "sites-available")
