@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/ploycloud/ploy-server-cli/src/common"
@@ -20,6 +21,8 @@ var SitesCmd = &cobra.Command{
 	Short: "Manage all sites",
 	Long:  `Start, stop, or restart all sites on the server.`,
 }
+
+var logBasePath = "/var/log"
 
 func init() {
 	SitesCmd.AddCommand(sitesStartCmd)
@@ -312,6 +315,11 @@ func launchSite(
 	siteType, domain, dbSource, dbHost, dbPort, dbName, dbUser, dbPassword, scalingType string,
 	replicas, maxReplicas int, siteID, hostname, phpVersion string, webhook string,
 ) error {
+	// Start logging
+	if err := createSiteLog(hostname, "Starting site creation process"); err != nil {
+		return fmt.Errorf("failed to create site log: %v", err)
+	}
+
 	// Set default domain if not provided
 	if domain == "" {
 		if hostname != "" {
@@ -319,34 +327,45 @@ func launchSite(
 		} else {
 			domain = "site.localhost"
 		}
+		createSiteLog(hostname, fmt.Sprintf("Using default domain: %s", domain))
 	}
 
 	// Create nginx configuration first
+	createSiteLog(hostname, "Creating nginx configuration...")
 	if err := createNginxConfig(domain, webhook); err != nil {
+		createSiteLog(hostname, fmt.Sprintf("Failed to create nginx configuration: %v", err))
 		return fmt.Errorf("failed to create nginx configuration: %v", err)
 	}
+	createSiteLog(hostname, "Nginx configuration created successfully")
 
 	// Get MySQL details if using internal database
 	if dbSource == "internal" {
+		createSiteLog(hostname, "Checking MySQL status...")
 		sendWebhook(webhook, "Checking MySQL status...")
 		mysqlStatus, err := checkMySQLStatus()
 		if err != nil {
+			createSiteLog(hostname, fmt.Sprintf("Error checking MySQL status: %v", err))
 			sendWebhook(webhook, fmt.Sprintf("Error checking MySQL status: %v", err))
 			return err
 		}
 
 		if !mysqlStatus {
+			createSiteLog(hostname, "MySQL is not running. Installing MySQL...")
 			sendWebhook(webhook, "MySQL is not running. Installing MySQL...")
 			if err := installMySQL("default_user", "default_password", "3306"); err != nil {
+				createSiteLog(hostname, fmt.Sprintf("Error installing MySQL: %v", err))
 				sendWebhook(webhook, fmt.Sprintf("Error installing MySQL: %v", err))
 				return err
 			}
+			createSiteLog(hostname, "MySQL installed successfully")
 			sendWebhook(webhook, "MySQL installed successfully.")
 		}
 
+		createSiteLog(hostname, "Fetching MySQL details...")
 		sendWebhook(webhook, "Fetching MySQL details...")
 		mysqlDetails, err := getServiceDetails("mysql")
 		if err != nil {
+			createSiteLog(hostname, fmt.Sprintf("Error fetching MySQL details: %v", err))
 			sendWebhook(webhook, fmt.Sprintf("Error fetching MySQL details: %v", err))
 			return err
 		}
@@ -355,6 +374,7 @@ func launchSite(
 		dbName = mysqlDetails["Database"]
 		dbUser = mysqlDetails["User"]
 		dbPassword = mysqlDetails["Password"]
+		createSiteLog(hostname, "MySQL details fetched successfully")
 	}
 
 	// Choose the appropriate Docker Compose template
@@ -416,6 +436,7 @@ func launchSite(
 	if err := os.WriteFile(composeFilePath, []byte(composeContent), 0644); err != nil {
 		return fmt.Errorf("failed to write docker-compose file: %v", err)
 	}
+	createSiteLog(hostname, fmt.Sprintf("Docker Compose file written to: %s", composeFilePath))
 
 	// Launch the site using docker-compose
 	cmd := execCommand("docker-compose", "-f", composeFilePath, "up", "-d")
@@ -424,7 +445,8 @@ func launchSite(
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to launch site: %v", err)
 	}
-
+	createSiteLog(hostname, "Launching site with docker-compose...")
+	createSiteLog(hostname, "Site launched successfully")
 	sendWebhook(webhook, "Site launched successfully!")
 	return nil
 }
@@ -484,7 +506,8 @@ func createNginxConfig(domain string, webhook string) error {
 	// Create container name based on domain
 	containerName := strings.ReplaceAll(domain, ".", "-")
 
-	configContent := fmt.Sprintf(`server {
+	configContent := fmt.Sprintf(
+		`server {
 	listen 80;
 	server_name %s;
 	
@@ -502,7 +525,8 @@ func createNginxConfig(domain string, webhook string) error {
 		proxy_set_header Upgrade $http_upgrade;
 		proxy_set_header Connection "upgrade";
 	}
-}`, domain, containerName)
+}`, domain, containerName,
+	)
 
 	// Create nginx sites directory if it doesn't exist
 	nginxSitesDir := filepath.Join(nginxBasePath, "sites-available")
@@ -535,4 +559,27 @@ func createNginxConfig(domain string, webhook string) error {
 
 	sendWebhook(webhook, "Nginx configuration created and enabled")
 	return nil
+}
+
+func createSiteLog(hostname, message string) error {
+	logDir := filepath.Join(logBasePath, "sites", hostname)
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		return fmt.Errorf("failed to create log directory: %v", err)
+	}
+
+	logFile := filepath.Join(logDir, "creating.log")
+	f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open log file: %v", err)
+	}
+	defer func(f *os.File) {
+		err := f.Close()
+		if err != nil {
+			fmt.Println("Error closing log file:", err)
+		}
+	}(f)
+
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	_, err = fmt.Fprintf(f, "[%s] %s\n", timestamp, message)
+	return err
 }
