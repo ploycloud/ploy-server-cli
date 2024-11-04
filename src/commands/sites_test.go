@@ -7,8 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ploycloud/ploy-server-cli/src/common"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/ploycloud/ploy-server-cli/src/common"
 )
 
 // Existing imports and test setup...
@@ -46,7 +47,7 @@ func TestValidateInputs(t *testing.T) {
 }
 
 func TestLaunchSite(t *testing.T) {
-	// Create a temporary directory for the test
+	// Create temporary directory for test
 	tempDir, err := ioutil.TempDir("", "test_launch_site")
 	assert.NoError(t, err)
 	defer os.RemoveAll(tempDir)
@@ -55,6 +56,11 @@ func TestLaunchSite(t *testing.T) {
 	oldSitesDir := common.SitesDir
 	common.SitesDir = tempDir
 	defer func() { common.SitesDir = oldSitesDir }()
+
+	// Save original log base path and restore after test
+	oldLogBasePath := logBasePath
+	logBasePath = tempDir
+	defer func() { logBasePath = oldLogBasePath }()
 
 	// Save original nginx base path and restore after test
 	oldNginxBasePath := nginxBasePath
@@ -126,6 +132,22 @@ func TestLaunchSite(t *testing.T) {
 		launchSite("wp", "example.com", "external", "db.example.com", "3306", "wordpress", "user", "password", "static", 2, 0, "site123", "host.example.com", "8.3", "")
 	})
 	assert.Contains(t, output, "Mock command executed")
+
+	// Check if log directory and file were created
+	logDir := filepath.Join(tempDir, "sites", "host.example.com")
+	assert.DirExists(t, logDir, "Log directory should exist")
+
+	logFile := filepath.Join(logDir, "creating.log")
+	assert.FileExists(t, logFile, "Log file should exist")
+
+	// Check log content
+	content, err = ioutil.ReadFile(logFile)
+	assert.NoError(t, err)
+	logContent := string(content)
+	assert.Contains(t, logContent, "Starting site creation process")
+	assert.Contains(t, logContent, "Using default domain: host.example.com.localhost")
+	assert.Contains(t, logContent, "Creating nginx configuration")
+	assert.Contains(t, logContent, "Site launched successfully")
 }
 
 // Add more tests for other functions as needed...
@@ -244,4 +266,32 @@ func TestCreateNginxConfig(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Contains(t, string(content), "server_name app.example.com;")
 	assert.Contains(t, string(content), "proxy_pass http://app-example-com:80;")
+}
+
+func TestCreateSiteLog(t *testing.T) {
+	// Create temporary directory for test
+	tempDir, err := ioutil.TempDir("", "test_site_log")
+	assert.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	// Save original log base path and restore after test
+	oldLogBasePath := logBasePath
+	logBasePath = tempDir
+	defer func() { logBasePath = oldLogBasePath }()
+
+	hostname := "test.example.com"
+	message := "Test log message"
+
+	err = createSiteLog(hostname, message)
+	assert.NoError(t, err)
+
+	// Check if log file was created
+	logFile := filepath.Join(tempDir, "sites", hostname, "creating.log")
+	assert.FileExists(t, logFile)
+
+	// Check log content
+	content, err := ioutil.ReadFile(logFile)
+	assert.NoError(t, err)
+	assert.Contains(t, string(content), message)
+	assert.Regexp(t, `\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] Test log message`, string(content))
 }
