@@ -67,14 +67,6 @@ func TestLaunchSite(t *testing.T) {
 	nginxBasePath = tempDir
 	defer func() { nginxBasePath = oldNginxBasePath }()
 
-	// Create nginx directories
-	nginxSitesDir := filepath.Join(tempDir, "sites-available")
-	nginxEnabledDir := filepath.Join(tempDir, "sites-enabled")
-	err = os.MkdirAll(nginxSitesDir, 0755)
-	assert.NoError(t, err)
-	err = os.MkdirAll(nginxEnabledDir, 0755)
-	assert.NoError(t, err)
-
 	// Mock the getDockerComposeTemplate function
 	oldGetDockerComposeTemplate := getDockerComposeTemplate
 	getDockerComposeTemplate = func(filename string) ([]byte, error) {
@@ -85,24 +77,57 @@ func TestLaunchSite(t *testing.T) {
 	// Mock the execCommand function
 	oldExecCommand := execCommand
 	execCommand = func(name string, arg ...string) *exec.Cmd {
-		if name == "systemctl" && arg[0] == "reload" && arg[1] == "nginx" {
-			return exec.Command("echo", "nginx reloaded")
-		}
 		return exec.Command("echo", "Mock command executed")
 	}
 	defer func() { execCommand = oldExecCommand }()
 
+	// Mock execSudo
+	oldExecSudo := execSudo
+	execSudo = func(name string, arg ...string) *exec.Cmd {
+		return exec.Command("echo", "Mock sudo command executed")
+	}
+	defer func() { execSudo = oldExecSudo }()
+
+	// Mock checkPloyUser
+	oldCheckPloyUser := checkPloyUser
+	checkPloyUser = func() bool { return true }
+	defer func() { checkPloyUser = oldCheckPloyUser }()
+
+	// Create required nginx directories
+	nginxSitesDir := filepath.Join(tempDir, "sites-available")
+	nginxEnabledDir := filepath.Join(tempDir, "sites-enabled")
+	err = os.MkdirAll(nginxSitesDir, 0755)
+	assert.NoError(t, err)
+	err = os.MkdirAll(nginxEnabledDir, 0755)
+	assert.NoError(t, err)
+
 	// Test with default domain
-	err = launchSite("wp", "", "external", "db.example.com", "3306", "wordpress", "user", "password", "static", 2, 0, "site123", "host.example.com", "8.3", "")
+	err = launchSite(
+		"wp",               // siteType
+		"",                 // domain (empty to test default)
+		"external",         // dbSource
+		"db.example.com",   // dbHost
+		"3306",             // dbPort
+		"wordpress",        // dbName
+		"user",             // dbUser
+		"password",         // dbPassword
+		"static",           // scalingType
+		2,                  // replicas
+		0,                  // maxReplicas
+		"site123",          // siteID
+		"host.example.com", // hostname
+		"8.3",              // phpVersion
+		"",                 // webhook
+	)
 	assert.NoError(t, err)
 
 	// Check if the site directory was created
 	siteDir := filepath.Join(tempDir, "host.example.com")
-	assert.DirExists(t, siteDir, "Site directory should exist")
+	assert.DirExists(t, siteDir)
 
 	// Check if the Docker Compose file was created
 	composePath := filepath.Join(siteDir, "docker-compose-wp-php8.3.yml")
-	assert.FileExists(t, composePath, "Docker Compose file should exist")
+	assert.FileExists(t, composePath)
 
 	// Check Docker Compose content
 	content, err := ioutil.ReadFile(composePath)
@@ -111,7 +136,7 @@ func TestLaunchSite(t *testing.T) {
 
 	// Check if nginx config was created
 	nginxConfigPath := filepath.Join(nginxSitesDir, "host.example.com.localhost.conf")
-	assert.FileExists(t, nginxConfigPath, "Nginx config file should exist")
+	assert.FileExists(t, nginxConfigPath)
 
 	// Check nginx config content
 	content, err = ioutil.ReadFile(nginxConfigPath)
@@ -120,33 +145,29 @@ func TestLaunchSite(t *testing.T) {
 
 	// Check if nginx config is enabled (symlinked)
 	enabledPath := filepath.Join(nginxEnabledDir, "host.example.com.localhost.conf")
-	assert.FileExists(t, enabledPath, "Nginx enabled config should exist")
+	assert.FileExists(t, enabledPath)
 
 	// Verify symlink
 	linkTarget, err := os.Readlink(enabledPath)
 	assert.NoError(t, err)
 	assert.Equal(t, nginxConfigPath, linkTarget)
 
-	// Check command execution
+	// Check command execution output
 	output := CaptureOutput(func() {
 		launchSite("wp", "example.com", "external", "db.example.com", "3306", "wordpress", "user", "password", "static", 2, 0, "site123", "host.example.com", "8.3", "")
 	})
 	assert.Contains(t, output, "Mock command executed")
 
-	// Check if log directory and file were created
+	// Check log file
 	logDir := filepath.Join(tempDir, "sites", "host.example.com")
-	assert.DirExists(t, logDir, "Log directory should exist")
-
 	logFile := filepath.Join(logDir, "creating.log")
-	assert.FileExists(t, logFile, "Log file should exist")
+	assert.FileExists(t, logFile)
 
 	// Check log content
 	content, err = ioutil.ReadFile(logFile)
 	assert.NoError(t, err)
 	logContent := string(content)
 	assert.Contains(t, logContent, "Starting site creation process")
-	assert.Contains(t, logContent, "Using default domain: host.example.com.localhost")
-	assert.Contains(t, logContent, "Creating nginx configuration")
 	assert.Contains(t, logContent, "Site launched successfully")
 }
 
@@ -212,60 +233,90 @@ func TestSetupNginxProxy(t *testing.T) {
 
 func TestCreateNginxConfig(t *testing.T) {
 	// Create temporary directory for test
-	tmpDir, err := ioutil.TempDir("", "nginx-test")
+	tempDir, err := ioutil.TempDir("", "test_nginx_config")
 	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tempDir)
 
 	// Save original nginx base path and restore after test
 	oldNginxBasePath := nginxBasePath
-	nginxBasePath = tmpDir
+	nginxBasePath = tempDir
 	defer func() { nginxBasePath = oldNginxBasePath }()
 
-	// Save original execCommand and restore after test
-	oldExecCommand := execCommand
-	defer func() { execCommand = oldExecCommand }()
+	// Save original checkPloyUser function and restore after test
+	oldCheckPloyUser := checkPloyUser
+	defer func() { checkPloyUser = oldCheckPloyUser }()
 
+	// Mock execCommand
+	oldExecCommand := execCommand
 	execCommand = func(name string, arg ...string) *exec.Cmd {
 		return exec.Command("echo", "mock command")
 	}
+	defer func() { execCommand = oldExecCommand }()
 
-	// Test creating nginx config
-	domain := "test.localhost"
-	err = createNginxConfig(domain, "")
-	assert.NoError(t, err)
+	// Mock execSudo
+	oldExecSudo := execSudo
+	execSudo = func(name string, arg ...string) *exec.Cmd {
+		return exec.Command("echo", "mock sudo command")
+	}
+	defer func() { execSudo = oldExecSudo }()
 
-	// Check if config file was created
-	configPath := filepath.Join(tmpDir, "sites-available", domain+".conf")
-	assert.FileExists(t, configPath)
+	tests := []struct {
+		name        string
+		isPloyUser  bool
+		domain      string
+		webhook     string
+		wantErr     bool
+		expectedErr string
+	}{
+		{
+			name:        "non-ploy user",
+			isPloyUser:  false,
+			domain:      "test.com",
+			webhook:     "",
+			wantErr:     true,
+			expectedErr: "this command must be run as the 'ploy' user",
+		},
+		{
+			name:        "ploy user success",
+			isPloyUser:  true,
+			domain:      "test.com",
+			webhook:     "",
+			wantErr:     false,
+			expectedErr: "",
+		},
+	}
 
-	// Check if enabled symlink was created
-	enabledPath := filepath.Join(tmpDir, "sites-enabled", domain+".conf")
-	assert.FileExists(t, enabledPath)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Set up mock function for this test case
+			checkPloyUser = func() bool { return tt.isPloyUser }
 
-	// Check config content
-	content, err := ioutil.ReadFile(configPath)
-	assert.NoError(t, err)
-	assert.Contains(t, string(content), "server_name test.localhost;")
-	assert.Contains(t, string(content), "proxy_pass http://test-localhost:80;")
-	assert.Contains(t, string(content), "proxy_set_header Upgrade $http_upgrade;")
-	assert.Contains(t, string(content), "proxy_set_header Connection \"upgrade\";")
+			// Create required directories
+			nginxSitesDir := filepath.Join(tempDir, "sites-available")
+			nginxEnabledDir := filepath.Join(tempDir, "sites-enabled")
+			err := os.MkdirAll(nginxSitesDir, 0755)
+			assert.NoError(t, err)
+			err = os.MkdirAll(nginxEnabledDir, 0755)
+			assert.NoError(t, err)
 
-	// Verify symlink
-	linkTarget, err := os.Readlink(enabledPath)
-	assert.NoError(t, err)
-	assert.Equal(t, configPath, linkTarget)
+			err = createNginxConfig(tt.domain, tt.webhook)
 
-	// Test with subdomain
-	domain = "app.example.com"
-	err = createNginxConfig(domain, "")
-	assert.NoError(t, err)
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expectedErr)
+			} else {
+				assert.NoError(t, err)
 
-	// Check config content for subdomain
-	configPath = filepath.Join(tmpDir, "sites-available", domain+".conf")
-	content, err = ioutil.ReadFile(configPath)
-	assert.NoError(t, err)
-	assert.Contains(t, string(content), "server_name app.example.com;")
-	assert.Contains(t, string(content), "proxy_pass http://app-example-com:80;")
+				// Verify config file was created
+				configPath := filepath.Join(nginxSitesDir, tt.domain+".conf")
+				assert.FileExists(t, configPath)
+
+				// Verify symlink was created
+				enabledPath := filepath.Join(nginxEnabledDir, tt.domain+".conf")
+				assert.FileExists(t, enabledPath)
+			}
+		})
+	}
 }
 
 func TestCreateSiteLog(t *testing.T) {

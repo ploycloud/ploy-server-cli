@@ -6,9 +6,12 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"os/user"
 
 	"github.com/fatih/color"
 	"github.com/ploycloud/ploy-server-cli/src/common"
@@ -23,6 +26,16 @@ var SitesCmd = &cobra.Command{
 }
 
 var logBasePath = "/var/log"
+
+var checkPloyUser = func() bool {
+	currentUser, err := user.Current()
+	if err != nil {
+		return false
+	}
+	return currentUser.Username == "ploy"
+}
+
+var execSudo = exec.Command
 
 func init() {
 	SitesCmd.AddCommand(sitesStartCmd)
@@ -501,6 +514,11 @@ func setupNginxProxy(webhook string) error {
 var nginxBasePath = "/etc/nginx"
 
 func createNginxConfig(domain string, webhook string) error {
+	// Check if running as ploy user
+	if !checkPloyUser() {
+		return fmt.Errorf("this command must be run as the 'ploy' user")
+	}
+
 	sendWebhook(webhook, "Creating nginx configuration...")
 
 	// Create container name based on domain
@@ -551,8 +569,8 @@ func createNginxConfig(domain string, webhook string) error {
 		return fmt.Errorf("failed to enable nginx configuration: %v", err)
 	}
 
-	// Reload nginx
-	cmd := execCommand("systemctl", "reload", "nginx")
+	// Reload nginx using sudo
+	cmd := execSudo("sudo", "systemctl", "reload", "nginx")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to reload nginx: %v", err)
 	}
