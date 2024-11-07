@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -120,11 +121,9 @@ services:
 	}
 	defer func() { execCommand = oldExecCommand }()
 
-	// Mock execSudo
+	// Mock execSudo with actual file operations
 	oldExecSudo := execSudo
-	execSudo = func(name string, arg ...string) *exec.Cmd {
-		return exec.Command("echo", "mock sudo command")
-	}
+	execSudo = mockExecSudo(t, tempDir)
 	defer func() { execSudo = oldExecSudo }()
 
 	// Create required directories
@@ -269,6 +268,125 @@ func TestSetupNginxProxy(t *testing.T) {
 	}
 }
 
+// Mock execSudo with actual file operations
+func mockExecSudo(t *testing.T, tempDir string) func(name string, arg ...string) *exec.Cmd {
+	return func(name string, arg ...string) *exec.Cmd {
+		t.Logf("Mock sudo command: %v", arg)
+
+		// Handle different sudo commands
+		if len(arg) == 0 {
+			return exec.Command("echo", "mock sudo command")
+		}
+
+		// First argument is the command or path
+		command := arg[0]
+
+		// Handle commands that start with a path
+		if strings.HasPrefix(command, "/") {
+			// This is likely a mv command with the source path
+			if len(arg) >= 2 {
+				src, dst := command, arg[1]
+				// Ensure destination directory exists
+				dstDir := filepath.Dir(dst)
+				if err := os.MkdirAll(dstDir, 0755); err != nil {
+					t.Logf("Failed to create destination directory %s: %v", dstDir, err)
+					return exec.Command("false")
+				}
+
+				// Read source file
+				content, err := os.ReadFile(src)
+				if err != nil {
+					t.Logf("Failed to read source file %s: %v", src, err)
+					return exec.Command("false")
+				}
+
+				// Write to destination
+				if err := os.WriteFile(dst, content, 0644); err != nil {
+					t.Logf("Failed to write destination file %s: %v", dst, err)
+					return exec.Command("false")
+				}
+
+				// Clean up source file
+				os.Remove(src)
+			}
+			return exec.Command("echo", "mock sudo command")
+		}
+
+		// Handle regular commands
+		switch command {
+		case "mkdir", "-p":
+			dirPath := arg[len(arg)-1]
+			err := os.MkdirAll(dirPath, 0755)
+			if err != nil {
+				t.Logf("Failed to create directory %s: %v", dirPath, err)
+				return exec.Command("false")
+			}
+
+		case "mv":
+			src, dst := arg[1], arg[2]
+			// Ensure destination directory exists
+			dstDir := filepath.Dir(dst)
+			if err := os.MkdirAll(dstDir, 0755); err != nil {
+				t.Logf("Failed to create destination directory %s: %v", dstDir, err)
+				return exec.Command("false")
+			}
+
+			// Read source file
+			content, err := os.ReadFile(src)
+			if err != nil {
+				t.Logf("Failed to read source file %s: %v", src, err)
+				return exec.Command("false")
+			}
+
+			// Write to destination
+			if err := os.WriteFile(dst, content, 0644); err != nil {
+				t.Logf("Failed to write destination file %s: %v", dst, err)
+				return exec.Command("false")
+			}
+
+			// Clean up source file
+			os.Remove(src)
+
+		case "chown", "root:root":
+			// No-op in tests
+			return exec.Command("echo", "mock chown")
+
+		case "chmod", "644":
+			// No-op in tests
+			return exec.Command("echo", "mock chmod")
+
+		case "ln", "-s":
+			if len(arg) >= 3 {
+				target := arg[len(arg)-2]
+				linkPath := arg[len(arg)-1]
+				// Remove existing symlink if it exists
+				os.Remove(linkPath)
+				// Create symlink
+				if err := os.Symlink(target, linkPath); err != nil {
+					t.Logf("Failed to create symlink from %s to %s: %v", target, linkPath, err)
+					return exec.Command("false")
+				}
+			}
+
+		case "rm", "-f":
+			if len(arg) >= 2 {
+				filePath := arg[len(arg)-1]
+				os.Remove(filePath) // Ignore errors for non-existent files
+			}
+
+		case "systemctl":
+			// No-op in tests
+			return exec.Command("echo", "mock systemctl command")
+
+		default:
+			t.Logf("Unhandled sudo command: %v", command)
+			t.Logf("With args: %v", arg[1:])
+		}
+
+		return exec.Command("echo", "mock sudo command")
+	}
+}
+
 func TestCreateNginxConfig(t *testing.T) {
 	// Create temporary directory for test
 	tempDir, err := ioutil.TempDir("", "test_nginx_config")
@@ -280,6 +398,14 @@ func TestCreateNginxConfig(t *testing.T) {
 	nginxBasePath = tempDir
 	defer func() { nginxBasePath = oldNginxBasePath }()
 
+	// Create required directories
+	nginxSitesDir := filepath.Join(tempDir, "sites-available")
+	nginxEnabledDir := filepath.Join(tempDir, "sites-enabled")
+	err = os.MkdirAll(nginxSitesDir, 0755)
+	assert.NoError(t, err)
+	err = os.MkdirAll(nginxEnabledDir, 0755)
+	assert.NoError(t, err)
+
 	// Mock execCommand
 	oldExecCommand := execCommand
 	execCommand = func(name string, arg ...string) *exec.Cmd {
@@ -289,56 +415,32 @@ func TestCreateNginxConfig(t *testing.T) {
 
 	// Mock execSudo
 	oldExecSudo := execSudo
-	execSudo = func(name string, arg ...string) *exec.Cmd {
-		return exec.Command("echo", "mock sudo command")
-	}
+	execSudo = mockExecSudo(t, tempDir)
 	defer func() { execSudo = oldExecSudo }()
 
-	tests := []struct {
-		name string
+	// Set PLOY_TEST_ENV
+	os.Setenv("PLOY_TEST_ENV", "true")
+	defer os.Unsetenv("PLOY_TEST_ENV")
 
-		domain      string
-		webhook     string
-		wantErr     bool
-		expectedErr string
-	}{
-		{
-			name:        "successful config creation",
-			domain:      "test.com",
-			webhook:     "",
-			wantErr:     false,
-			expectedErr: "",
-		},
-	}
+	domain := "test.com"
+	err = createNginxConfig(domain, "")
+	assert.NoError(t, err)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create required directories
-			nginxSitesDir := filepath.Join(tempDir, "sites-available")
-			nginxEnabledDir := filepath.Join(tempDir, "sites-enabled")
-			err := os.MkdirAll(nginxSitesDir, 0755)
-			assert.NoError(t, err)
-			err = os.MkdirAll(nginxEnabledDir, 0755)
-			assert.NoError(t, err)
+	// Wait a moment for file operations to complete
+	time.Sleep(100 * time.Millisecond)
 
-			err = createNginxConfig(tt.domain, tt.webhook)
+	// Verify config file was created
+	configPath := filepath.Join(nginxSitesDir, domain+".conf")
+	assert.FileExists(t, configPath)
 
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), tt.expectedErr)
-			} else {
-				assert.NoError(t, err)
+	// Read and verify config content
+	content, err := ioutil.ReadFile(configPath)
+	assert.NoError(t, err)
+	assert.Contains(t, string(content), fmt.Sprintf("server_name %s;", domain))
 
-				// Verify config file was created
-				configPath := filepath.Join(nginxSitesDir, tt.domain+".conf")
-				assert.FileExists(t, configPath)
-
-				// Verify symlink was created
-				enabledPath := filepath.Join(nginxEnabledDir, tt.domain+".conf")
-				assert.FileExists(t, enabledPath)
-			}
-		})
-	}
+	// Verify symlink was created
+	enabledPath := filepath.Join(nginxEnabledDir, domain+".conf")
+	assert.FileExists(t, enabledPath)
 }
 
 func TestCreateSiteLog(t *testing.T) {
