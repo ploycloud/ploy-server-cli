@@ -278,108 +278,91 @@ func mockExecSudo(t *testing.T, tempDir string) func(name string, arg ...string)
 			return exec.Command("echo", "mock sudo command")
 		}
 
-		// First argument is the command or path
-		command := arg[0]
+		// Handle shell commands
+		if name == "sh" && len(arg) >= 2 && arg[0] == "-c" {
+			shellCmd := arg[1]
+			t.Logf("Shell command: %s", shellCmd)
 
-		// Handle commands that start with a path
-		if strings.HasPrefix(command, "/") {
-			// This is likely a mv command with the source path
-			if len(arg) >= 2 {
-				src, dst := command, arg[1]
-				// Ensure destination directory exists
-				dstDir := filepath.Dir(dst)
-				if err := os.MkdirAll(dstDir, 0755); err != nil {
-					t.Logf("Failed to create destination directory %s: %v", dstDir, err)
-					return exec.Command("false")
+			// Split the command into parts
+			cmdParts := strings.Split(shellCmd, "&&")
+			for _, part := range cmdParts {
+				part = strings.TrimSpace(part)
+				words := strings.Fields(part)
+				if len(words) == 0 {
+					continue
 				}
 
-				// Read source file
-				content, err := os.ReadFile(src)
-				if err != nil {
-					t.Logf("Failed to read source file %s: %v", src, err)
-					return exec.Command("false")
-				}
+				switch words[0] {
+				case "mkdir":
+					if len(words) >= 3 && words[1] == "-p" {
+						for _, dir := range words[2:] {
+							if err := os.MkdirAll(dir, 0755); err != nil {
+								t.Logf("Failed to create directory %s: %v", dir, err)
+								return exec.Command("false")
+							}
+						}
+					}
 
-				// Write to destination
-				if err := os.WriteFile(dst, content, 0644); err != nil {
-					t.Logf("Failed to write destination file %s: %v", dst, err)
-					return exec.Command("false")
-				}
+				case "mv":
+					if len(words) >= 3 {
+						src, dst := words[1], words[2]
+						// Read source file
+						content, err := os.ReadFile(src)
+						if err != nil {
+							t.Logf("Failed to read source file %s: %v", src, err)
+							return exec.Command("false")
+						}
+						// Ensure destination directory exists
+						dstDir := filepath.Dir(dst)
+						if err := os.MkdirAll(dstDir, 0755); err != nil {
+							t.Logf("Failed to create destination directory %s: %v", dstDir, err)
+							return exec.Command("false")
+						}
+						// Write to destination
+						if err := os.WriteFile(dst, content, 0644); err != nil {
+							t.Logf("Failed to write destination file %s: %v", dst, err)
+							return exec.Command("false")
+						}
+						// Clean up source file
+						os.Remove(src)
+					}
 
-				// Clean up source file
-				os.Remove(src)
+				case "chown":
+					// No-op in tests
+					continue
+
+				case "chmod":
+					// No-op in tests
+					continue
+
+				case "rm":
+					if len(words) >= 3 && words[1] == "-f" {
+						os.Remove(words[2]) // Ignore errors for non-existent files
+					}
+
+				case "ln":
+					if len(words) >= 4 && words[1] == "-s" {
+						target, linkPath := words[2], words[3]
+						// Remove existing symlink if it exists
+						os.Remove(linkPath)
+						// Create symlink
+						if err := os.Symlink(target, linkPath); err != nil {
+							t.Logf("Failed to create symlink from %s to %s: %v", target, linkPath, err)
+							return exec.Command("false")
+						}
+					}
+				}
 			}
 			return exec.Command("echo", "mock sudo command")
 		}
 
 		// Handle regular commands
-		switch command {
-		case "mkdir", "-p":
-			dirPath := arg[len(arg)-1]
-			err := os.MkdirAll(dirPath, 0755)
-			if err != nil {
-				t.Logf("Failed to create directory %s: %v", dirPath, err)
-				return exec.Command("false")
-			}
-
-		case "mv":
-			src, dst := arg[1], arg[2]
-			// Ensure destination directory exists
-			dstDir := filepath.Dir(dst)
-			if err := os.MkdirAll(dstDir, 0755); err != nil {
-				t.Logf("Failed to create destination directory %s: %v", dstDir, err)
-				return exec.Command("false")
-			}
-
-			// Read source file
-			content, err := os.ReadFile(src)
-			if err != nil {
-				t.Logf("Failed to read source file %s: %v", src, err)
-				return exec.Command("false")
-			}
-
-			// Write to destination
-			if err := os.WriteFile(dst, content, 0644); err != nil {
-				t.Logf("Failed to write destination file %s: %v", dst, err)
-				return exec.Command("false")
-			}
-
-			// Clean up source file
-			os.Remove(src)
-
-		case "chown", "root:root":
-			// No-op in tests
-			return exec.Command("echo", "mock chown")
-
-		case "chmod", "644":
-			// No-op in tests
-			return exec.Command("echo", "mock chmod")
-
-		case "ln", "-s":
-			if len(arg) >= 3 {
-				target := arg[len(arg)-2]
-				linkPath := arg[len(arg)-1]
-				// Remove existing symlink if it exists
-				os.Remove(linkPath)
-				// Create symlink
-				if err := os.Symlink(target, linkPath); err != nil {
-					t.Logf("Failed to create symlink from %s to %s: %v", target, linkPath, err)
-					return exec.Command("false")
-				}
-			}
-
-		case "rm", "-f":
-			if len(arg) >= 2 {
-				filePath := arg[len(arg)-1]
-				os.Remove(filePath) // Ignore errors for non-existent files
-			}
-
+		switch arg[0] {
 		case "systemctl":
 			// No-op in tests
 			return exec.Command("echo", "mock systemctl command")
-
 		default:
-			t.Logf("Unhandled sudo command: %v", command)
+			t.Logf("Unhandled sudo command: %v", arg[0])
 			t.Logf("With args: %v", arg[1:])
 		}
 
