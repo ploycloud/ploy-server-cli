@@ -77,11 +77,6 @@ func TestLaunchSite(t *testing.T) {
 		nginxBasePath = oldNginxBasePath
 	}()
 
-	// Mock checkPloyUser
-	oldCheckPloyUser := checkPloyUser
-	checkPloyUser = func() bool { return true }
-	defer func() { checkPloyUser = oldCheckPloyUser }()
-
 	// Set test environment variable
 	os.Setenv("PLOY_TEST_ENV", "true")
 	defer os.Unsetenv("PLOY_TEST_ENV")
@@ -285,10 +280,6 @@ func TestCreateNginxConfig(t *testing.T) {
 	nginxBasePath = tempDir
 	defer func() { nginxBasePath = oldNginxBasePath }()
 
-	// Save original checkPloyUser function and restore after test
-	oldCheckPloyUser := checkPloyUser
-	defer func() { checkPloyUser = oldCheckPloyUser }()
-
 	// Mock execCommand
 	oldExecCommand := execCommand
 	execCommand = func(name string, arg ...string) *exec.Cmd {
@@ -304,36 +295,15 @@ func TestCreateNginxConfig(t *testing.T) {
 	defer func() { execSudo = oldExecSudo }()
 
 	tests := []struct {
-		name        string
-		isPloyUser  bool
-		sudoUser    string
+		name string
+
 		domain      string
 		webhook     string
 		wantErr     bool
 		expectedErr string
 	}{
 		{
-			name:        "non-ploy user",
-			isPloyUser:  false,
-			sudoUser:    "",
-			domain:      "test.com",
-			webhook:     "",
-			wantErr:     true,
-			expectedErr: "this command must be run as the 'ploy' user",
-		},
-		{
-			name:        "ploy user success",
-			isPloyUser:  true,
-			sudoUser:    "",
-			domain:      "test.com",
-			webhook:     "",
-			wantErr:     false,
-			expectedErr: "",
-		},
-		{
-			name:        "sudo as ploy user",
-			isPloyUser:  false,
-			sudoUser:    "ploy",
+			name:        "successful config creation",
 			domain:      "test.com",
 			webhook:     "",
 			wantErr:     false,
@@ -343,20 +313,6 @@ func TestCreateNginxConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set up mock function for this test case
-			checkPloyUser = func() bool {
-				if tt.isPloyUser {
-					return true
-				}
-				return tt.sudoUser == "ploy"
-			}
-
-			// Mock environment
-			if tt.sudoUser != "" {
-				os.Setenv("SUDO_USER", tt.sudoUser)
-				defer os.Unsetenv("SUDO_USER")
-			}
-
 			// Create required directories
 			nginxSitesDir := filepath.Join(tempDir, "sites-available")
 			nginxEnabledDir := filepath.Join(tempDir, "sites-enabled")

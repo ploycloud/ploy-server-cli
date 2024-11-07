@@ -11,8 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"os/user"
-
 	"github.com/fatih/color"
 	"github.com/ploycloud/ploy-server-cli/src/common"
 	"github.com/ploycloud/ploy-server-cli/src/docker"
@@ -26,22 +24,6 @@ var SitesCmd = &cobra.Command{
 }
 
 var logBasePath = "/var/log"
-
-var checkPloyUser = func() bool {
-	currentUser, err := user.Current()
-	if err != nil {
-		return false
-	}
-
-	// Check if user is ploy or running with sudo as ploy
-	if currentUser.Username == "ploy" {
-		return true
-	}
-
-	// Check if running with sudo
-	sudoUser := os.Getenv("SUDO_USER")
-	return sudoUser == "ploy"
-}
 
 var execSudo = func(name string, arg ...string) *exec.Cmd {
 	// Add -n flag to prevent password prompt
@@ -533,11 +515,6 @@ func setupNginxProxy(webhook string) error {
 var nginxBasePath = "/etc/nginx"
 
 func createNginxConfig(domain string, webhook string) error {
-	// Check if running as ploy user
-	if !checkPloyUser() {
-		return fmt.Errorf("this command must be run as the 'ploy' user")
-	}
-
 	sendWebhook(webhook, "Creating nginx configuration...")
 
 	// Create container name based on domain

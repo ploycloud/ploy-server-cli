@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 )
 
-const CurrentCliVersion = "0.5.6"
+const CurrentCliVersion = "0.5.7"
 
 var (
 	HomeDir       = os.Getenv("HOME")
