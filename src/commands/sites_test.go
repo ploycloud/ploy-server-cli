@@ -293,6 +293,38 @@ func mockExecSudo(t *testing.T, tempDir string) func(name string, arg ...string)
 				}
 
 				switch words[0] {
+				case "sudo":
+					// Handle sudo commands
+					if len(words) >= 4 && words[1] == "-u" && words[2] == "ploy" {
+						switch words[3] {
+						case "mkdir":
+							if len(words) >= 6 && words[4] == "-p" {
+								for _, dir := range words[5:] {
+									if err := os.MkdirAll(dir, 0755); err != nil {
+										t.Logf("Failed to create directory %s: %v", dir, err)
+										return exec.Command("false")
+									}
+								}
+							}
+						case "mv":
+							if len(words) >= 6 {
+								src, dst := words[4], words[5]
+								if err := os.Rename(src, dst); err != nil {
+									t.Logf("Failed to move file from %s to %s: %v", src, dst, err)
+									return exec.Command("false")
+								}
+							}
+						case "ln":
+							if len(words) >= 7 && words[4] == "-s" {
+								target, linkPath := words[5], words[6]
+								os.Remove(linkPath) // Remove existing symlink if it exists
+								if err := os.Symlink(target, linkPath); err != nil {
+									t.Logf("Failed to create symlink from %s to %s: %v", target, linkPath, err)
+									return exec.Command("false")
+								}
+							}
+						}
+					}
 				case "mkdir":
 					if len(words) >= 3 && words[1] == "-p" {
 						for _, dir := range words[2:] {
@@ -302,7 +334,6 @@ func mockExecSudo(t *testing.T, tempDir string) func(name string, arg ...string)
 							}
 						}
 					}
-
 				case "mv":
 					if len(words) >= 3 {
 						src, dst := words[1], words[2]
@@ -312,40 +343,25 @@ func mockExecSudo(t *testing.T, tempDir string) func(name string, arg ...string)
 							t.Logf("Failed to read source file %s: %v", src, err)
 							return exec.Command("false")
 						}
-						// Ensure destination directory exists
-						dstDir := filepath.Dir(dst)
-						if err := os.MkdirAll(dstDir, 0755); err != nil {
-							t.Logf("Failed to create destination directory %s: %v", dstDir, err)
-							return exec.Command("false")
-						}
 						// Write to destination
 						if err := os.WriteFile(dst, content, 0644); err != nil {
 							t.Logf("Failed to write destination file %s: %v", dst, err)
 							return exec.Command("false")
 						}
-						// Clean up source file
+						// Remove source file
 						os.Remove(src)
 					}
-
-				case "chown":
+				case "chown", "chmod":
 					// No-op in tests
 					continue
-
-				case "chmod":
-					// No-op in tests
-					continue
-
 				case "rm":
 					if len(words) >= 3 && words[1] == "-f" {
-						os.Remove(words[2]) // Ignore errors for non-existent files
+						os.Remove(words[2])
 					}
-
 				case "ln":
 					if len(words) >= 4 && words[1] == "-s" {
 						target, linkPath := words[2], words[3]
-						// Remove existing symlink if it exists
-						os.Remove(linkPath)
-						// Create symlink
+						os.Remove(linkPath) // Remove existing symlink if it exists
 						if err := os.Symlink(target, linkPath); err != nil {
 							t.Logf("Failed to create symlink from %s to %s: %v", target, linkPath, err)
 							return exec.Command("false")
@@ -356,14 +372,29 @@ func mockExecSudo(t *testing.T, tempDir string) func(name string, arg ...string)
 			return exec.Command("echo", "mock sudo command")
 		}
 
-		// Handle regular commands
+		// Handle regular sudo commands
 		switch arg[0] {
+		case "mkdir":
+			if len(arg) >= 3 && arg[1] == "-p" {
+				for _, dir := range arg[2:] {
+					if err := os.MkdirAll(dir, 0755); err != nil {
+						t.Logf("Failed to create directory %s: %v", dir, err)
+						return exec.Command("false")
+					}
+				}
+			}
+		case "touch":
+			if len(arg) >= 2 {
+				f, err := os.OpenFile(arg[1], os.O_CREATE, 0644)
+				if err != nil {
+					t.Logf("Failed to touch file %s: %v", arg[1], err)
+					return exec.Command("false")
+				}
+				f.Close()
+			}
 		case "systemctl":
 			// No-op in tests
 			return exec.Command("echo", "mock systemctl command")
-		default:
-			t.Logf("Unhandled sudo command: %v", arg[0])
-			t.Logf("With args: %v", arg[1:])
 		}
 
 		return exec.Command("echo", "mock sudo command")
