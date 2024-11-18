@@ -546,14 +546,10 @@ func createNginxConfig(domain string, webhook string) error {
 	nginxSitesDir := filepath.Join(nginxBasePath, "sites-available")
 	nginxEnabledDir := filepath.Join(nginxBasePath, "sites-enabled")
 
-	// First, try to create the directories with sudo as ploy user
-	cmd := execSudo("sh", "-c", fmt.Sprintf("sudo -u ploy mkdir -p %s %s", nginxSitesDir, nginxEnabledDir))
+	// Create directories with sudo
+	cmd := execSudo("mkdir", "-p", nginxSitesDir, nginxEnabledDir)
 	if err := cmd.Run(); err != nil {
-		// If that fails, try creating with root
-		cmd = execSudo("mkdir", "-p", nginxSitesDir, nginxEnabledDir)
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("failed to create nginx directories: %v", err)
-		}
+		return fmt.Errorf("failed to create nginx directories: %v", err)
 	}
 
 	// Write nginx configuration using a temporary file
@@ -568,30 +564,31 @@ func createNginxConfig(domain string, webhook string) error {
 	}
 	tempFile.Close()
 
-	// Move the temporary file to the nginx sites-available directory using sudo as ploy user
+	// Move the temporary file to the nginx sites-available directory
 	configPath := filepath.Join(nginxSitesDir, domain+".conf")
-	cmd = execSudo("sh", "-c", fmt.Sprintf("sudo -u ploy mv %s %s && sudo chown ploy:ploy %s && sudo chmod 644 %s",
-		tempFile.Name(), configPath, configPath, configPath))
+	cmd = execSudo("mv", tempFile.Name(), configPath)
 	if err := cmd.Run(); err != nil {
-		// If that fails, try with root
-		cmd = execSudo("sh", "-c", fmt.Sprintf("mv %s %s && chown root:root %s && chmod 644 %s",
-			tempFile.Name(), configPath, configPath, configPath))
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("failed to install nginx configuration: %v", err)
-		}
+		return fmt.Errorf("failed to move nginx configuration: %v", err)
 	}
 
-	// Create symlink in sites-enabled using sudo as ploy user
-	enabledPath := filepath.Join(nginxEnabledDir, domain+".conf")
-	cmd = execSudo("sh", "-c", fmt.Sprintf("sudo -u ploy rm -f %s && sudo -u ploy ln -s %s %s",
-		enabledPath, configPath, enabledPath))
+	// Set proper permissions
+	cmd = execSudo("chmod", "644", configPath)
 	if err := cmd.Run(); err != nil {
-		// If that fails, try with root
-		cmd = execSudo("sh", "-c", fmt.Sprintf("rm -f %s && ln -s %s %s",
-			enabledPath, configPath, enabledPath))
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("failed to enable nginx configuration: %v", err)
-		}
+		return fmt.Errorf("failed to set nginx configuration permissions: %v", err)
+	}
+
+	// Create symlink in sites-enabled
+	enabledPath := filepath.Join(nginxEnabledDir, domain+".conf")
+	// Remove existing symlink if it exists
+	cmd = execSudo("rm", "-f", enabledPath)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to remove old nginx symlink: %v", err)
+	}
+
+	// Create new symlink
+	cmd = execSudo("ln", "-s", configPath, enabledPath)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to create nginx symlink: %v", err)
 	}
 
 	// Skip nginx reload in test environment
