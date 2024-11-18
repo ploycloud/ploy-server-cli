@@ -517,6 +517,10 @@ var nginxBasePath = "/etc/nginx"
 func createNginxConfig(domain string, webhook string) error {
 	sendWebhook(webhook, "Creating nginx configuration...")
 
+	// Add debug logging
+	fmt.Printf("Debug: Starting nginx config creation for domain: %s\n", domain)
+	fmt.Printf("Debug: Nginx base path: %s\n", nginxBasePath)
+
 	// Create container name based on domain
 	containerName := strings.ReplaceAll(domain, ".", "-")
 
@@ -546,60 +550,95 @@ func createNginxConfig(domain string, webhook string) error {
 	nginxSitesDir := filepath.Join(nginxBasePath, "sites-available")
 	nginxEnabledDir := filepath.Join(nginxBasePath, "sites-enabled")
 
-	// Create directories with sudo
-	cmd := execSudo("mkdir", "-p", nginxSitesDir, nginxEnabledDir)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to create nginx directories: %v", err)
+	fmt.Printf("Debug: Creating directories:\n  Sites dir: %s\n  Enabled dir: %s\n", nginxSitesDir, nginxEnabledDir)
+
+	// Try to create directories without sudo first
+	err := os.MkdirAll(nginxSitesDir, 0755)
+	if err != nil {
+		fmt.Printf("Debug: Failed to create sites dir without sudo: %v\n", err)
+		// Try with sudo
+		cmd := execSudo("mkdir", "-p", nginxSitesDir)
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("Debug: Failed to create sites dir with sudo: %v\n", err)
+			return fmt.Errorf("failed to create nginx sites directory: %v", err)
+		}
+	}
+
+	err = os.MkdirAll(nginxEnabledDir, 0755)
+	if err != nil {
+		fmt.Printf("Debug: Failed to create enabled dir without sudo: %v\n", err)
+		// Try with sudo
+		cmd := execSudo("mkdir", "-p", nginxEnabledDir)
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("Debug: Failed to create enabled dir with sudo: %v\n", err)
+			return fmt.Errorf("failed to create nginx enabled directory: %v", err)
+		}
 	}
 
 	// Write nginx configuration using a temporary file
 	tempFile, err := os.CreateTemp("", "nginx-conf-")
 	if err != nil {
+		fmt.Printf("Debug: Failed to create temp file: %v\n", err)
 		return fmt.Errorf("failed to create temporary file: %v", err)
 	}
 	defer os.Remove(tempFile.Name())
 
+	fmt.Printf("Debug: Created temp file: %s\n", tempFile.Name())
+
 	if _, err := tempFile.WriteString(configContent); err != nil {
+		fmt.Printf("Debug: Failed to write to temp file: %v\n", err)
 		return fmt.Errorf("failed to write to temporary file: %v", err)
 	}
 	tempFile.Close()
 
 	// Move the temporary file to the nginx sites-available directory
 	configPath := filepath.Join(nginxSitesDir, domain+".conf")
-	cmd = execSudo("mv", tempFile.Name(), configPath)
+	fmt.Printf("Debug: Moving temp file to: %s\n", configPath)
+
+	cmd := execSudo("cp", tempFile.Name(), configPath)
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to move nginx configuration: %v", err)
+		fmt.Printf("Debug: Failed to copy config file: %v\n", err)
+		return fmt.Errorf("failed to copy nginx configuration: %v", err)
 	}
 
 	// Set proper permissions
+	fmt.Printf("Debug: Setting permissions on: %s\n", configPath)
 	cmd = execSudo("chmod", "644", configPath)
 	if err := cmd.Run(); err != nil {
+		fmt.Printf("Debug: Failed to set permissions: %v\n", err)
 		return fmt.Errorf("failed to set nginx configuration permissions: %v", err)
 	}
 
 	// Create symlink in sites-enabled
 	enabledPath := filepath.Join(nginxEnabledDir, domain+".conf")
+	fmt.Printf("Debug: Creating symlink at: %s\n", enabledPath)
+
 	// Remove existing symlink if it exists
 	cmd = execSudo("rm", "-f", enabledPath)
 	if err := cmd.Run(); err != nil {
+		fmt.Printf("Debug: Failed to remove old symlink: %v\n", err)
 		return fmt.Errorf("failed to remove old nginx symlink: %v", err)
 	}
 
 	// Create new symlink
 	cmd = execSudo("ln", "-s", configPath, enabledPath)
 	if err := cmd.Run(); err != nil {
+		fmt.Printf("Debug: Failed to create symlink: %v\n", err)
 		return fmt.Errorf("failed to create nginx symlink: %v", err)
 	}
 
 	// Skip nginx reload in test environment
 	if os.Getenv("PLOY_TEST_ENV") != "true" {
+		fmt.Println("Debug: Reloading nginx service")
 		// Reload nginx using sudo
 		cmd = execSudo("systemctl", "reload", "nginx")
 		if err := cmd.Run(); err != nil {
+			fmt.Printf("Debug: Failed to reload nginx: %v\n", err)
 			return fmt.Errorf("failed to reload nginx: %v", err)
 		}
 	}
 
+	fmt.Println("Debug: Nginx configuration completed successfully")
 	sendWebhook(webhook, "Nginx configuration created and enabled")
 	return nil
 }

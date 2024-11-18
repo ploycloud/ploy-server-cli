@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -467,13 +466,110 @@ func TestCreateNginxConfig(t *testing.T) {
 	// Mock execCommand
 	oldExecCommand := execCommand
 	execCommand = func(name string, arg ...string) *exec.Cmd {
+		t.Logf("Mock command: %s %v", name, arg)
 		return exec.Command("echo", "mock command")
 	}
 	defer func() { execCommand = oldExecCommand }()
 
-	// Mock execSudo
+	// Mock execSudo with actual file operations
 	oldExecSudo := execSudo
-	execSudo = mockExecSudo(t, tempDir)
+	execSudo = func(name string, arg ...string) *exec.Cmd {
+		t.Logf("Mock sudo command: %s %v", name, arg)
+
+		switch name {
+		case "mkdir":
+			if len(arg) >= 2 && arg[0] == "-p" {
+				for _, dir := range arg[1:] {
+					t.Logf("Creating directory: %s", dir)
+					if err := os.MkdirAll(dir, 0755); err != nil {
+						t.Logf("Failed to create directory: %v", err)
+						return exec.Command("false")
+					}
+				}
+			}
+			return exec.Command("echo", "directory created")
+
+		case "cp":
+			if len(arg) >= 2 {
+				src, dst := arg[0], arg[1]
+				t.Logf("Copying file from %s to %s", src, dst)
+				if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+					t.Logf("Failed to create destination directory: %v", err)
+					return exec.Command("false")
+				}
+				content, err := ioutil.ReadFile(src)
+				if err != nil {
+					t.Logf("Failed to read source file: %v", err)
+					return exec.Command("false")
+				}
+				if err := ioutil.WriteFile(dst, content, 0644); err != nil {
+					t.Logf("Failed to write destination file: %v", err)
+					return exec.Command("false")
+				}
+			}
+			return exec.Command("echo", "file copied")
+
+		case "chmod":
+			// Actually set the permissions in test
+			if len(arg) >= 2 {
+				mode, _ := strconv.ParseInt(arg[0], 8, 32)
+				file := arg[1]
+				if err := os.Chmod(file, os.FileMode(mode)); err != nil {
+					t.Logf("Failed to set permissions: %v", err)
+					return exec.Command("false")
+				}
+			}
+			return exec.Command("echo", "permissions set")
+
+		case "rm":
+			if len(arg) >= 2 && arg[0] == "-f" {
+				for _, file := range arg[1:] {
+					t.Logf("Removing file: %s", file)
+					os.Remove(file) // Ignore errors for non-existent files
+				}
+			}
+			return exec.Command("echo", "file removed")
+
+		case "ln":
+			if len(arg) >= 3 && arg[0] == "-s" {
+				target, linkPath := arg[1], arg[2]
+				t.Logf("Creating symlink from %s to %s", target, linkPath)
+
+				// Ensure target exists
+				if _, err := os.Stat(target); err != nil {
+					t.Logf("Target file does not exist: %s", target)
+					return exec.Command("false")
+				}
+
+				// Ensure parent directory exists
+				if err := os.MkdirAll(filepath.Dir(linkPath), 0755); err != nil {
+					t.Logf("Failed to create symlink directory: %v", err)
+					return exec.Command("false")
+				}
+
+				// Remove existing symlink if it exists
+				os.Remove(linkPath)
+
+				// Create new symlink
+				if err := os.Symlink(target, linkPath); err != nil {
+					t.Logf("Failed to create symlink: %v", err)
+					return exec.Command("false")
+				}
+
+				// Verify symlink was created
+				if _, err := os.Lstat(linkPath); err != nil {
+					t.Logf("Failed to verify symlink creation: %v", err)
+					return exec.Command("false")
+				}
+			}
+			return exec.Command("echo", "symlink created")
+
+		case "systemctl":
+			return exec.Command("echo", "systemctl executed")
+		}
+
+		return exec.Command("echo", fmt.Sprintf("mock sudo command: %s %v", name, arg))
+	}
 	defer func() { execSudo = oldExecSudo }()
 
 	// Set PLOY_TEST_ENV
@@ -483,9 +579,6 @@ func TestCreateNginxConfig(t *testing.T) {
 	domain := "test.com"
 	err = createNginxConfig(domain, "")
 	assert.NoError(t, err)
-
-	// Wait a moment for file operations to complete
-	time.Sleep(100 * time.Millisecond)
 
 	// Verify config file was created
 	configPath := filepath.Join(tempDir, "sites-available", domain+".conf")
