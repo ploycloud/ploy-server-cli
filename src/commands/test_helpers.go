@@ -54,6 +54,53 @@ func TestHelperProcess(t *testing.T) {
 		} else if args[0] == "info" {
 			fmt.Println("Docker info output")
 		}
+	case "sudo":
+		if len(args) == 0 {
+			fmt.Fprintf(os.Stderr, "No sudo command\n")
+			os.Exit(2)
+		}
+
+		// Handle sudo commands
+		sudoCmd := args[0]
+		sudoArgs := args[1:]
+
+		switch sudoCmd {
+		case "cp":
+			if len(sudoArgs) != 2 {
+				fmt.Fprintf(os.Stderr, "Invalid cp arguments\n")
+				os.Exit(1)
+			}
+			// Simulate successful copy
+			fmt.Println("File copied successfully")
+			os.Exit(0)
+		case "chmod":
+			if len(sudoArgs) != 2 {
+				fmt.Fprintf(os.Stderr, "Invalid chmod arguments\n")
+				os.Exit(1)
+			}
+			fmt.Println("Permissions set successfully")
+			os.Exit(0)
+		case "mkdir":
+			if len(sudoArgs) < 2 || sudoArgs[0] != "-p" {
+				fmt.Fprintf(os.Stderr, "Invalid mkdir arguments\n")
+				os.Exit(1)
+			}
+			fmt.Println("Directory created successfully")
+			os.Exit(0)
+		case "ln":
+			if len(sudoArgs) < 3 || sudoArgs[0] != "-s" {
+				fmt.Fprintf(os.Stderr, "Invalid ln arguments\n")
+				os.Exit(1)
+			}
+			fmt.Println("Symlink created successfully")
+			os.Exit(0)
+		case "systemctl":
+			fmt.Println("Service managed successfully")
+			os.Exit(0)
+		default:
+			fmt.Fprintf(os.Stderr, "Unknown sudo command: %s\n", sudoCmd)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command %q\n", cmd)
 		os.Exit(2)

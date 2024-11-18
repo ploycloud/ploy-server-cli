@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -517,9 +518,14 @@ var nginxBasePath = "/etc/nginx"
 func createNginxConfig(domain string, webhook string) error {
 	sendWebhook(webhook, "Creating nginx configuration...")
 
-	// Add debug logging
 	fmt.Printf("Debug: Starting nginx config creation for domain: %s\n", domain)
 	fmt.Printf("Debug: Nginx base path: %s\n", nginxBasePath)
+
+	nginxSitesDir := filepath.Join(nginxBasePath, "sites-available")
+	nginxEnabledDir := filepath.Join(nginxBasePath, "sites-enabled")
+
+	fmt.Printf("Debug: Creating directories:\n  Sites dir: %s\n  Enabled dir: %s\n",
+		nginxSitesDir, nginxEnabledDir)
 
 	// Create container name based on domain
 	containerName := strings.ReplaceAll(domain, ".", "-")
@@ -546,37 +552,21 @@ func createNginxConfig(domain string, webhook string) error {
 }`, domain, containerName,
 	)
 
-	// Create nginx sites directory if it doesn't exist
-	nginxSitesDir := filepath.Join(nginxBasePath, "sites-available")
-	nginxEnabledDir := filepath.Join(nginxBasePath, "sites-enabled")
-
-	fmt.Printf("Debug: Creating directories:\n  Sites dir: %s\n  Enabled dir: %s\n", nginxSitesDir, nginxEnabledDir)
-
-	// Try to create directories without sudo first
-	err := os.MkdirAll(nginxSitesDir, 0755)
-	if err != nil {
-		fmt.Printf("Debug: Failed to create sites dir without sudo: %v\n", err)
-		// Try with sudo
-		cmd := execSudo("mkdir", "-p", nginxSitesDir)
-		if err := cmd.Run(); err != nil {
-			fmt.Printf("Debug: Failed to create sites dir with sudo: %v\n", err)
-			return fmt.Errorf("failed to create nginx sites directory: %v", err)
-		}
+	// Always try with sudo for directory creation
+	cmd := execSudo("mkdir", "-p", nginxSitesDir)
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("Debug: Failed to create sites dir with sudo: %v\n", err)
+		return fmt.Errorf("failed to create nginx sites directory: %v", err)
 	}
 
-	err = os.MkdirAll(nginxEnabledDir, 0755)
-	if err != nil {
-		fmt.Printf("Debug: Failed to create enabled dir without sudo: %v\n", err)
-		// Try with sudo
-		cmd := execSudo("mkdir", "-p", nginxEnabledDir)
-		if err := cmd.Run(); err != nil {
-			fmt.Printf("Debug: Failed to create enabled dir with sudo: %v\n", err)
-			return fmt.Errorf("failed to create nginx enabled directory: %v", err)
-		}
+	cmd = execSudo("mkdir", "-p", nginxEnabledDir)
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("Debug: Failed to create enabled dir with sudo: %v\n", err)
+		return fmt.Errorf("failed to create nginx enabled directory: %v", err)
 	}
 
 	// Write nginx configuration using a temporary file
-	tempFile, err := os.CreateTemp("", "nginx-conf-")
+	tempFile, err := ioutil.TempFile("", "nginx-conf-")
 	if err != nil {
 		fmt.Printf("Debug: Failed to create temp file: %v\n", err)
 		return fmt.Errorf("failed to create temporary file: %v", err)
@@ -591,11 +581,17 @@ func createNginxConfig(domain string, webhook string) error {
 	}
 	tempFile.Close()
 
+	// Set permissions on temp file first
+	if err := os.Chmod(tempFile.Name(), 0644); err != nil {
+		fmt.Printf("Debug: Failed to set temp file permissions: %v\n", err)
+		return fmt.Errorf("failed to set temp file permissions: %v", err)
+	}
+
 	// Move the temporary file to the nginx sites-available directory
 	configPath := filepath.Join(nginxSitesDir, domain+".conf")
 	fmt.Printf("Debug: Moving temp file to: %s\n", configPath)
 
-	cmd := execSudo("cp", tempFile.Name(), configPath)
+	cmd = execSudo("cp", tempFile.Name(), configPath)
 	if err := cmd.Run(); err != nil {
 		fmt.Printf("Debug: Failed to copy config file: %v\n", err)
 		return fmt.Errorf("failed to copy nginx configuration: %v", err)
@@ -630,7 +626,6 @@ func createNginxConfig(domain string, webhook string) error {
 	// Skip nginx reload in test environment
 	if os.Getenv("PLOY_TEST_ENV") != "true" {
 		fmt.Println("Debug: Reloading nginx service")
-		// Reload nginx using sudo
 		cmd = execSudo("systemctl", "reload", "nginx")
 		if err := cmd.Run(); err != nil {
 			fmt.Printf("Debug: Failed to reload nginx: %v\n", err)
